@@ -6,3 +6,5 @@ dist
 public/data/*.json
 !public/data/demo.json
 *.log
+/.cursor
+repovisualizer.config.json

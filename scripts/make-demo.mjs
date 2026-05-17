@@ -8,6 +8,7 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { shouldIncludeFile } from './includeFile.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outPath = path.resolve(__dirname, '..', 'public', 'data', 'demo.json');
@@ -39,10 +40,12 @@ function sha() {
 }
 
 function commit(message, changes) {
+  const filtered = changes.filter((c) => shouldIncludeFile(c.path));
+  if (!filtered.length) return;
   const stats = {
-    filesChanged: changes.length,
-    insertions: changes.reduce((a, c) => a + (c.added || 0), 0),
-    deletions:  changes.reduce((a, c) => a + (c.removed || 0), 0),
+    filesChanged: filtered.length,
+    insertions: filtered.reduce((a, c) => a + (c.added || 0), 0),
+    deletions:  filtered.reduce((a, c) => a + (c.removed || 0), 0),
   };
   const author = pick(AUTHORS);
   commits.push({
@@ -53,7 +56,7 @@ function commit(message, changes) {
     authorEmail: author[1],
     message,
     stats,
-    changes: changes.map((c) => ({
+    changes: filtered.map((c) => ({
       path: c.path,
       added: c.added ?? Math.floor(20 + rng() * 60),
       removed: c.removed ?? 0,
@@ -65,8 +68,7 @@ function commit(message, changes) {
 }
 
 // ── Sprint 0: Project bootstrap ──────────────────────────────────────────
-commit('Initial commit — README and license', [
-  { path: 'README.md', added: 40, status: 'A' },
+commit('Initial commit — project scaffold', [
   { path: 'LICENSE',   added: 21, status: 'A' },
   { path: 'package.json', added: 18, status: 'A' },
 ]);
@@ -249,11 +251,6 @@ commit('Caching layer with Redis', [
   { path: 'src/cache/redis-client.ts', added: 65, status: 'A', imports: ['src/config.ts', 'src/utils/logger.ts'] },
   { path: 'src/cache/index.ts',        added: 30, status: 'A', imports: ['src/cache/redis-client.ts'] },
   { path: 'src/users/model.ts', added: 12, removed: 4, imports: ['src/db/index.ts', 'src/cache/index.ts'] },
-]);
-commit('Docs: developer onboarding guide', [
-  { path: 'docs/getting-started.md', added: 120, status: 'A' },
-  { path: 'docs/architecture.md',    added: 200, status: 'A' },
-  { path: 'docs/api.md',             added: 180, status: 'A' },
 ]);
 commit('Add feature flags system', [
   { path: 'src/flags/index.ts',     added: 80, status: 'A', imports: ['src/db/index.ts', 'src/cache/index.ts'] },

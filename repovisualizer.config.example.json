@@ -1,0 +1,13 @@
+{
+  "exclude": [
+    "dist/**",
+    "build/**",
+    "coverage/**",
+    "vendor/**",
+    "**/*.generated.ts",
+    "**/__fixtures__/**",
+    "**/*.test.ts",
+    "**/*.spec.tsx",
+    "legacy/**"
+  ]
+}

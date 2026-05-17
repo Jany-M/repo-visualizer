@@ -8,6 +8,7 @@
  *
  * Usage:
  *   node scripts/analyze.mjs <repo-path> [--out=public/data/history.json] [--max=500]
+ *   node scripts/analyze.mjs <repo-path> [--config=repovisualizer.config.json]
  *
  * The output is consumed by the React app to drive the cinematic timeline.
  */
@@ -17,6 +18,8 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { shouldIncludeFile, setCustomExcludes } from './includeFile.mjs';
+import { loadAnalyzeConfig } from './loadConfig.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -45,9 +48,17 @@ if (!existsSync(path.join(repoPath, '.git'))) {
   process.exit(1);
 }
 
+const analyzeConfig = await loadAnalyzeConfig(repoPath, flags.config);
+setCustomExcludes(analyzeConfig.exclude);
+
 console.log(`→ Analyzing repo: ${repoPath}`);
 console.log(`→ Output: ${outPath}`);
 if (maxCommits) console.log(`→ Limiting to ${maxCommits} most recent commits`);
+if (analyzeConfig.configPath) {
+  console.log(`→ Config: ${analyzeConfig.configPath} (${analyzeConfig.exclude.length} exclude pattern(s))`);
+} else if (analyzeConfig.exclude.length) {
+  console.log(`→ Config: ${analyzeConfig.exclude.length} exclude pattern(s) from --config`);
+}
 
 // ---------- Import parsers ------------------------------------------------
 
@@ -264,6 +275,7 @@ async function analyze() {
     const changes = [];
     for (const f of diffSummary.files) {
       const p = f.file;
+      if (!shouldIncludeFile(p)) continue;
       allPaths.add(p);
       const ext = path.extname(p).toLowerCase();
       const parser = PARSERS[ext];
@@ -290,12 +302,19 @@ async function analyze() {
       changes.push(change);
     }
 
+    const parents = (commit.parent || '')
+      .split(/\s+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
     out.commits.push({
       sha: commit.hash,
       shortSha: commit.hash.slice(0, 7),
       date: commit.date,
       author: commit.author_name,
       authorEmail: commit.author_email,
+      parents,
+      isMerge: parents.length > 1,
       message: commit.message.split('\n')[0].slice(0, 200),
       stats: {
         filesChanged: changes.length,
