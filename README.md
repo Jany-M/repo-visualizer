@@ -29,7 +29,7 @@ The timeline plays automatically, or you can scrub through history,
 adjust playback speed, and **export the whole animation as a WebM video**
 or **GIF** for sharing.
 
-![Repo Visualizer - Themes](repo_visualizer_four_themes_preview.svg "Repo Visualizer Themes")
+![Repo Visualizer - Themes](repo_visualizer_themes.svg "Repo Visualizer Themes")
 
 ---
 
