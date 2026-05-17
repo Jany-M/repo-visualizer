@@ -115,12 +115,10 @@ export function drawClusterLabels(ctx, frame, palette, style, clusterColorForFn)
 
   const fontSize = style === 'minimal' ? 10 : 11;
   ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
   ctx.font = `600 ${fontSize}px "JetBrains Mono", "SF Mono", ui-monospace, monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.lineJoin = 'round';
-  ctx.lineWidth = style === 'minimal' ? 2.5 : 3.5;
-  ctx.strokeStyle = style === 'minimal' ? 'rgba(255, 255, 255, 0.92)' : 'rgba(0, 0, 0, 0.72)';
 
   for (const [dir, clusterNodes] of byDir) {
     let minX = Infinity;
@@ -167,10 +165,7 @@ export function drawClusterLabels(ctx, frame, palette, style, clusterColorForFn)
       && clusterNodes.some((n) => frame.neighborSet?.has(n.path));
     ctx.globalAlpha = hasHighlight && !clusterTouched ? 0.22 : 0.95;
     ctx.fillStyle = c.core;
-
-    const label = dir;
-    ctx.strokeText(label, labelX, labelY);
-    ctx.fillText(label, labelX, labelY);
+    ctx.fillText(dir, labelX, labelY);
   }
 
   ctx.restore();

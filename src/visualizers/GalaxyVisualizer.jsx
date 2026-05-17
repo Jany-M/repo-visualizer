@@ -226,7 +226,6 @@ function drawGalaxy(ctx, frame, { stars, nebulae, palette }) {
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, w, h);
 
-  drawClusterLabels(ctx, frame, palette, 'galaxy', clusterColorFor);
-
   ctx.globalCompositeOperation = 'source-over';
+  drawClusterLabels(ctx, frame, palette, 'galaxy', clusterColorFor);
 }
