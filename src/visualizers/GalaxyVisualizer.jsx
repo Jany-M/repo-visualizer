@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { useVisualizerCore } from './useVisualizerCore.js';
 import { clusterColorFor } from '../engine/colors.js';
 import {
-  applyNodeAlpha, drawHighlightLinks, drawSelectionRing, linkAlpha,
+  applyNodeAlpha, drawClusterLabels, drawHighlightLinks, drawSelectionRing, linkAlpha,
   nodeDrawRadius, safeRadius, shouldDrawRipple, shouldGlow,
 } from './drawHelpers.js';
 
@@ -72,7 +72,7 @@ export default function GalaxyVisualizer({
 }
 
 function drawGalaxy(ctx, frame, { stars, nebulae, palette }) {
-  const { w, h, now, nodes, links, ripples } = frame;
+  const { w, h, now, nodes, links, ripples, clusters } = frame;
 
   // -------- 1. Nebula bloom background --------
   ctx.globalCompositeOperation = 'screen';
@@ -225,6 +225,8 @@ function drawGalaxy(ctx, frame, { stars, nebulae, palette }) {
   vignette.addColorStop(1, 'rgba(40, 45, 80, 1)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, w, h);
+
+  drawClusterLabels(ctx, frame, palette, 'galaxy', clusterColorFor);
 
   ctx.globalCompositeOperation = 'source-over';
 }

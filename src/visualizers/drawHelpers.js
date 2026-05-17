@@ -97,3 +97,81 @@ export function drawSelectionRing(ctx, n, frame, stroke = 'rgba(255, 255, 255, 0
   ctx.stroke();
   ctx.restore();
 }
+
+/**
+ * One folder label per cluster, placed outside the node blob along the outward axis.
+ */
+export function drawClusterLabels(ctx, frame, palette, style, clusterColorForFn) {
+  const { w, h, nodes, clusters } = frame;
+  if (!nodes?.length) return;
+
+  const canvasCx = w / 2;
+  const canvasCy = h / 2;
+  const byDir = new Map();
+  for (const n of nodes) {
+    if (!byDir.has(n.dir)) byDir.set(n.dir, []);
+    byDir.get(n.dir).push(n);
+  }
+
+  const fontSize = style === 'minimal' ? 10 : 11;
+  ctx.save();
+  ctx.font = `600 ${fontSize}px "JetBrains Mono", "SF Mono", ui-monospace, monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = style === 'minimal' ? 2.5 : 3.5;
+  ctx.strokeStyle = style === 'minimal' ? 'rgba(255, 255, 255, 0.92)' : 'rgba(0, 0, 0, 0.72)';
+
+  for (const [dir, clusterNodes] of byDir) {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const n of clusterNodes) {
+      const r = nodeDrawRadius(n, frame);
+      minX = Math.min(minX, n.x - r);
+      maxX = Math.max(maxX, n.x + r);
+      minY = Math.min(minY, n.y - r);
+      maxY = Math.max(maxY, n.y + r);
+    }
+
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    let dx = cx - canvasCx;
+    let dy = cy - canvasCy;
+    let dist = Math.hypot(dx, dy);
+    if (dist < 8) {
+      const layoutCenter = clusters?.get?.(dir);
+      if (layoutCenter?.angle != null) {
+        dx = Math.cos(layoutCenter.angle);
+        dy = Math.sin(layoutCenter.angle);
+      } else {
+        dx = 0;
+        dy = -1;
+      }
+      dist = 1;
+    } else {
+      dx /= dist;
+      dy /= dist;
+    }
+
+    const halfW = (maxX - minX) / 2;
+    const halfH = (maxY - minY) / 2;
+    const extent = Math.hypot(halfW, halfH) + (style === 'minimal' ? 16 : 20);
+    const labelX = cx + dx * extent;
+    const labelY = cy + dy * extent;
+
+    const c = clusterColorForFn(palette, dir, style);
+    const hasHighlight = frame.dimOthers && frame.selectedPath;
+    const clusterTouched = hasHighlight
+      && clusterNodes.some((n) => frame.neighborSet?.has(n.path));
+    ctx.globalAlpha = hasHighlight && !clusterTouched ? 0.22 : 0.95;
+    ctx.fillStyle = c.core;
+
+    const label = dir;
+    ctx.strokeText(label, labelX, labelY);
+    ctx.fillText(label, labelX, labelY);
+  }
+
+  ctx.restore();
+}

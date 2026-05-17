@@ -2,7 +2,7 @@ import React, { useMemo, useRef } from 'react';
 import { useVisualizerCore } from './useVisualizerCore.js';
 import { clusterColorFor } from '../engine/colors.js';
 import {
-  applyNodeAlpha, drawHighlightLinks, drawSelectionRing, linkAlpha,
+  applyNodeAlpha, drawClusterLabels, drawHighlightLinks, drawSelectionRing, linkAlpha,
   nodeDrawRadius, safeRadius, shouldDrawRipple, shouldGlow,
 } from './drawHelpers.js';
 
@@ -170,6 +170,8 @@ function drawOrganic(ctx, frame, { caustics, palette }) {
       ctx.fill();
     }
   }
+
+  drawClusterLabels(ctx, frame, palette, 'organic', clusterColorFor);
 
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';

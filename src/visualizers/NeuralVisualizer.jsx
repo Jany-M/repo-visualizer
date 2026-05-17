@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { useVisualizerCore } from './useVisualizerCore.js';
 import { clusterColorFor } from '../engine/colors.js';
 import {
-  applyNodeAlpha, drawHighlightLinks, drawSelectionRing, linkAlpha,
+  applyNodeAlpha, drawClusterLabels, drawHighlightLinks, drawSelectionRing, linkAlpha,
   nodeDrawRadius, safeRadius, shouldDrawRipple, shouldGlow,
 } from './drawHelpers.js';
 
@@ -173,6 +173,8 @@ function drawNeural(ctx, frame, { palette }) {
   scanGrad.addColorStop(1, 'rgba(0, 255, 234, 0)');
   ctx.fillStyle = scanGrad;
   ctx.fillRect(0, scanY - 40, w, 80);
+
+  drawClusterLabels(ctx, frame, palette, 'neural', clusterColorFor);
 
   ctx.globalCompositeOperation = 'source-over';
 }

@@ -5,11 +5,13 @@
 import React, { useEffect, useRef } from 'react';
 import { createLayout } from '../engine/layout.js';
 import {
+  applyCameraTransform,
   createCamera, zoomAt, panBy, fitBounds, lerpCamera, snapCamera, screenToWorld,
 } from '../engine/camera.js';
 import { getNeighborSet } from '../engine/graphState.js';
 import { isNodeVisible } from '../engine/visibility.js';
-import { clusterColor, paletteEntry } from '../engine/colors.js';
+import { clusterColor, clusterColorFor, paletteEntry } from '../engine/colors.js';
+import { drawClusterLabels } from './drawHelpers.js';
 
 const VS = `#version 300 es
 in vec2 a_pos;
@@ -79,6 +81,8 @@ export default function WebGLVisualizer({
     if (!host) return;
 
     let canvas;
+    let labelCanvas;
+    let labelCtx;
     let gl;
     let program;
     let layout;
@@ -95,10 +99,16 @@ export default function WebGLVisualizer({
     let failed = false;
 
     try {
+      host.style.position = 'relative';
       canvas = document.createElement('canvas');
       canvas.style.width = '100%';
       canvas.style.height = '100%';
+      canvas.style.display = 'block';
       host.appendChild(canvas);
+      labelCanvas = document.createElement('canvas');
+      labelCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none';
+      host.appendChild(labelCanvas);
+      labelCtx = labelCanvas.getContext('2d');
       gl = canvas.getContext('webgl2', { alpha: true, antialias: true })
         || canvas.getContext('webgl', { alpha: true });
       if (!gl) throw new Error('WebGL unavailable');
@@ -134,6 +144,8 @@ export default function WebGLVisualizer({
       const dpr = Math.min(2, devicePixelRatio || 1);
       canvas.width = Math.floor(w * dpr);
       canvas.height = Math.floor(h * dpr);
+      labelCanvas.width = Math.floor(w * dpr);
+      labelCanvas.height = Math.floor(h * dpr);
       layout.resize(w, h);
     }
     resize();
@@ -263,6 +275,23 @@ export default function WebGLVisualizer({
       gl.vertexAttribPointer(aColor, 3, gl.FLOAT, false, 0, 0);
 
       gl.drawArrays(gl.POINTS, 0, nodes.length);
+
+      const dpr = Math.min(2, devicePixelRatio || 1);
+      labelCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      labelCtx.clearRect(0, 0, w, h);
+      labelCtx.save();
+      applyCameraTransform(labelCtx, camera, dpr);
+      drawClusterLabels(labelCtx, {
+        w,
+        h,
+        nodes,
+        clusters: layout.getClusterCenters(),
+        selectedPath: p.selectedPath,
+        neighborSet: neighborSet || new Set(),
+        dimOthers: !!neighborSet,
+      }, p.palette, 'galaxy', clusterColorFor);
+      labelCtx.restore();
+
       raf = requestAnimationFrame(frame);
     }
     raf = requestAnimationFrame(frame);
@@ -275,6 +304,7 @@ export default function WebGLVisualizer({
       canvas.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
+      if (labelCanvas?.parentNode) labelCanvas.parentNode.removeChild(labelCanvas);
       if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
     };
   }, [onInitFailed]);

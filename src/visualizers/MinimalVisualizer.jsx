@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { useVisualizerCore } from './useVisualizerCore.js';
 import { clusterColorFor } from '../engine/colors.js';
 import {
-  applyNodeAlpha, drawHighlightLinks, drawSelectionRing, linkAlpha,
+  applyNodeAlpha, drawClusterLabels, drawHighlightLinks, drawSelectionRing, linkAlpha,
   nodeDrawRadius, safeRadius, shouldDrawRipple, shouldGlow,
 } from './drawHelpers.js';
 
@@ -117,23 +117,7 @@ function drawMinimal(ctx, frame, { palette }) {
     }
   }
 
-  // -------- 6. Labels on the largest nodes per cluster --------
-  ctx.font = "500 11px 'Inter', system-ui, sans-serif";
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  // Find largest node per cluster
-  const largestPerCluster = new Map();
-  for (const n of nodes) {
-    applyNodeAlpha(ctx, n, frame);
-    const cur = largestPerCluster.get(n.dir);
-    if (!cur || n.r > cur.r) largestPerCluster.set(n.dir, n);
-  }
-  for (const [cluster, n] of largestPerCluster) {
-    if (n.r < 14) continue;
-    const label = cluster.replace(/^src\//, '').replace(/^tests\//, 'test/');
-    ctx.fillStyle = 'rgba(15, 17, 22, 0.92)';
-    ctx.fillText(label, n.x, n.y - n.r * 0.55 - 12);
-  }
+  drawClusterLabels(ctx, frame, palette, 'minimal', clusterColorFor);
 
   ctx.globalCompositeOperation = 'source-over';
 }
