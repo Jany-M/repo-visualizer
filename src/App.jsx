@@ -208,6 +208,9 @@ export default function App() {
         currentCommit={currentCommit}
         onOpenExport={() => setExportOpen(true)}
         recording={recording}
+        branchView={branchView}
+        onBranchViewChange={setBranchView}
+        branchSupported={branchSupported}
       />
       <CommitCard commit={currentCommit} />
       <Legend state={timeline.state} palette={palette} style={style} commitIndex={timeline.index} />
@@ -240,9 +243,6 @@ export default function App() {
         onZoomIn={() => cameraApiRef.current?.zoomIn()}
         onZoomOut={() => cameraApiRef.current?.zoomOut()}
         onZoomReset={() => cameraApiRef.current?.reset()}
-        branchView={branchView}
-        onBranchViewChange={setBranchView}
-        branchSupported={branchSupported}
         perfMode={perfMode}
         onPerfModeChange={setPerfMode}
         visibleCount={visibleCount}

@@ -363,43 +363,93 @@ button:focus-visible {
 
 .toggle-chip input { accent-color: var(--accent); }
 
-.perf-select,
 .speed-control select {
   color-scheme: dark;
   accent-color: var(--accent);
 }
 
-.perf-select option,
 .speed-control select option {
   background-color: #121624;
   color: var(--fg);
 }
 
-.app[data-style='minimal'] .perf-select,
 .app[data-style='minimal'] .speed-control select {
   color-scheme: light;
 }
 
-.app[data-style='minimal'] .perf-select option,
 .app[data-style='minimal'] .speed-control select option {
   background-color: #f7f5f0;
   color: var(--fg);
 }
 
-.perf-select {
-  font-size: 10px;
-  padding: 4px 6px;
-  background: var(--bg-elevated);
+.perf-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 6px 0 10px;
   border: 1px solid var(--hairline);
-  border-radius: 6px;
-  color: var(--fg-muted);
-  font-family: var(--font-mono);
-  cursor: pointer;
+  background: var(--bg-elevated);
+  border-radius: 8px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
-.perf-select:focus {
-  outline: none;
-  border-color: var(--hairline-strong);
+.perf-control-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--fg-dim);
+  flex-shrink: 0;
+}
+
+.perf-mode-picker {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.perf-mode-btn {
+  height: 26px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.perf-mode-btn:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.perf-mode-btn.active {
+  background: linear-gradient(135deg, rgba(138, 180, 255, 0.22), rgba(255, 138, 216, 0.12));
+  color: var(--fg);
+  box-shadow: 0 0 12px rgba(138, 180, 255, 0.15);
+}
+
+.perf-mode-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.app[data-style='minimal'] .perf-mode-picker {
+  background: rgba(15, 17, 22, 0.06);
+}
+
+.app[data-style='minimal'] .perf-mode-btn.active {
+  background: rgba(15, 17, 22, 0.12);
+  box-shadow: none;
   color: var(--fg);
 }
 
@@ -436,12 +486,103 @@ button:focus-visible {
   color: var(--fg);
 }
 
+.repo-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .repo-meta .repo-name {
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 600;
   color: var(--fg);
   letter-spacing: -0.01em;
+}
+
+.header-branch-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.header-branch-toggle:hover {
+  border-color: var(--hairline-strong);
+  color: var(--fg);
+}
+
+.header-branch-toggle.is-on {
+  border-color: rgba(138, 180, 255, 0.45);
+  color: var(--fg);
+  box-shadow: 0 0 20px rgba(138, 180, 255, 0.12);
+}
+
+.header-branch-toggle-label {
+  line-height: 1;
+  user-select: none;
+}
+
+.header-branch-toggle-track {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--hairline);
+  flex-shrink: 0;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.header-branch-toggle.is-on .header-branch-toggle-track {
+  background: rgba(138, 180, 255, 0.35);
+  border-color: rgba(138, 180, 255, 0.5);
+}
+
+.header-branch-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--fg-muted);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.header-branch-toggle.is-on .header-branch-toggle-thumb {
+  transform: translateX(12px);
+  background: #fff;
+}
+
+.app[data-style='minimal'] .header-branch-toggle {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: var(--hairline-strong);
+}
+
+.app[data-style='minimal'] .header-branch-toggle-track {
+  background: rgba(15, 17, 22, 0.08);
+}
+
+.app[data-style='minimal'] .header-branch-toggle.is-on .header-branch-toggle-track {
+  background: rgba(15, 17, 22, 0.2);
 }
 
 /* ───────── Commit info card ───────── */

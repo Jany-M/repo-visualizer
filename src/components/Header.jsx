@@ -21,7 +21,16 @@ function ExportIcon() {
   );
 }
 
-export default function Header({ dataset, source, currentCommit, onOpenExport, recording }) {
+export default function Header({
+  dataset,
+  source,
+  currentCommit,
+  onOpenExport,
+  recording,
+  branchView = false,
+  onBranchViewChange,
+  branchSupported = false,
+}) {
   if (!dataset) return null;
   const ts = currentCommit ? new Date(currentCommit.date) : null;
   return (
@@ -49,7 +58,24 @@ export default function Header({ dataset, source, currentCommit, onOpenExport, r
         </div>
       </div>
       <div className="repo-meta">
-        <div className="repo-name">{dataset.repo}</div>
+        <div className="repo-name-row">
+          <div className="repo-name">{dataset.repo}</div>
+          {branchSupported && onBranchViewChange && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={branchView}
+              className={`header-branch-toggle${branchView ? ' is-on' : ''}`}
+              onClick={() => onBranchViewChange(!branchView)}
+              title="Spread merge commits across vertical lanes"
+            >
+              <span className="header-branch-toggle-label">Branches</span>
+              <span className="header-branch-toggle-track" aria-hidden="true">
+                <span className="header-branch-toggle-thumb" />
+              </span>
+            </button>
+          )}
+        </div>
         <div>
           {dataset.totalCommits} commits
           {source === 'demo' && ' · demo dataset'}
