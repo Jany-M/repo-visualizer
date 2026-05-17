@@ -22,6 +22,25 @@ const RestartIcon = () => (
   </svg>
 );
 
+/** perfMode values: auto | off (canvas) | on (WebGL) */
+const PERF_MODES = [
+  {
+    value: 'auto',
+    label: 'Auto Res',
+    title: 'Use fast GPU rendering only when the graph is very large',
+  },
+  {
+    value: 'off',
+    label: 'Hi-Res',
+    title: 'Full canvas — import lines, effects, and richest visuals',
+  },
+  {
+    value: 'on',
+    label: 'Low-Res',
+    title: 'Fast GPU points — best for huge repos, fewer visual details',
+  },
+];
+
 export default function ControlBar({
   commits,
   index,
@@ -39,9 +58,6 @@ export default function ControlBar({
   onZoomIn,
   onZoomOut,
   onZoomReset,
-  branchView,
-  onBranchViewChange,
-  branchSupported,
   perfMode,
   onPerfModeChange,
   visibleCount,
@@ -71,22 +87,27 @@ export default function ControlBar({
           <input type="checkbox" checked={autoFit} onChange={(e) => onAutoFitChange(e.target.checked)} />
           Auto fit
         </label>
-        {branchSupported && (
-          <label className="toggle-chip" title="Spread merge commits across lanes">
-            <input type="checkbox" checked={branchView} onChange={(e) => onBranchViewChange(e.target.checked)} />
-            Branches
-          </label>
-        )}
-        <select
-          className="perf-select"
-          value={perfMode}
-          onChange={(e) => onPerfModeChange(e.target.value)}
-          title="Performance renderer (WebGL when needed)"
+        <div
+          className="perf-control"
+          role="group"
+          aria-label="Rendering quality"
         >
-          <option value="auto">Perf: auto</option>
-          <option value="on">Perf: on</option>
-          <option value="off">Perf: off</option>
-        </select>
+          <span className="perf-control-label">VIEW</span>
+          <div className="perf-mode-picker">
+            {PERF_MODES.map((mode) => (
+              <button
+                key={mode.value}
+                type="button"
+                className={`perf-mode-btn${perfMode === mode.value ? ' active' : ''}`}
+                aria-pressed={perfMode === mode.value}
+                title={mode.title}
+                onClick={() => onPerfModeChange(mode.value)}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <StylePicker style={style} onChange={onStyleChange} />
         <div className="spacer" />
         <div className="commit-counter">
@@ -98,3 +119,4 @@ export default function ControlBar({
     </div>
   );
 }
+
