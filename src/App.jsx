@@ -13,7 +13,6 @@ import Header from './components/Header.jsx';
 import CommitCard from './components/CommitCard.jsx';
 import ControlBar from './components/ControlBar.jsx';
 import Legend from './components/Legend.jsx';
-import ExportModal from './components/ExportModal.jsx';
 import NodeInspector from './components/NodeInspector.jsx';
 import GalaxyVisualizer from './visualizers/GalaxyVisualizer.jsx';
 import OrganicVisualizer from './visualizers/OrganicVisualizer.jsx';
@@ -39,6 +38,10 @@ function loadBool(key, defaultVal) {
   }
 }
 
+function waitMs(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function App() {
   const { dataset, source, loading } = useDataset();
   const timeline = useTimeline(dataset);
@@ -46,6 +49,9 @@ export default function App() {
   const [exportOpen, setExportOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordingProgress, setRecordingProgress] = useState(0);
+  const [encoding, setEncoding] = useState(false);
+  const [encodeProgress, setEncodeProgress] = useState(0);
+  const [encodeFormat, setEncodeFormat] = useState('webm');
   const [selectedPath, setSelectedPath] = useState(null);
   const wasPlayingRef = useRef(false);
   const [branchView, setBranchView] = useState(false);
@@ -58,6 +64,8 @@ export default function App() {
   const stageRef = useRef(null);
   const timelineRef = useRef(timeline);
   const cameraApiRef = useRef(null);
+  const recordStopRef = useRef(false);
+  const perfBeforeRecordRef = useRef(null);
   timelineRef.current = timeline;
 
   const branchSupported = datasetSupportsBranches(dataset);
@@ -133,12 +141,113 @@ export default function App() {
     localStorage.setItem('rv-auto-fit', String(autoFit));
   }, [autoFit]);
 
+  const updateRecordingProgress = useCallback(() => {
+    const total = timelineRef.current.commits.length;
+    const idx = timelineRef.current.index;
+    setRecordingProgress(total > 1 ? Math.max(0, (idx + 1) / total) : 0);
+  }, []);
+
+  const handleStopRecord = useCallback(() => {
+    recordStopRef.current = true;
+    timeline.pause();
+  }, [timeline]);
+
+  const handlePauseRecord = useCallback(() => {
+    if (!recording) return;
+    timeline.toggle();
+  }, [recording, timeline]);
+
+  const handleEncodingStart = useCallback((format) => {
+    setRecording(false);
+    setEncoding(true);
+    setEncodeProgress(0);
+    setEncodeFormat(format);
+  }, []);
+
+  const repoName = dataset?.repo;
+
+  const handleStartRecord = useCallback(async (opts) => {
+    const getCanvas = () => stageRef.current?.querySelector('canvas');
+
+    if (opts.format === 'png') {
+      const canvas = getCanvas();
+      if (!canvas) return;
+      setExportOpen(false);
+      await startRecording({
+        canvas,
+        opts,
+        shouldStop: () => true,
+        repo: repoName,
+      });
+      return;
+    }
+
+    recordStopRef.current = false;
+    perfBeforeRecordRef.current = perfMode;
+    if (showWebGL || perfMode !== 'off') {
+      setPerfMode('off');
+      await waitMs(450);
+    }
+
+    let canvas = getCanvas();
+    if (!canvas) return;
+
+    setExportOpen(false);
+    setRecording(true);
+    setRecordingProgress(0);
+
+    timeline.restart();
+    await waitMs(200);
+    timeline.play();
+
+    const total = timeline.commits.length;
+
+    try {
+      await startRecording({
+        canvas,
+        opts,
+        onCaptureProgress: updateRecordingProgress,
+        onEncodeProgress: setEncodeProgress,
+        onEncodingStart: handleEncodingStart,
+        shouldStop: () => recordStopRef.current || timelineRef.current.index >= total - 1,
+        repo: repoName,
+      });
+    } finally {
+      timeline.pause();
+      setRecording(false);
+      setEncoding(false);
+      setRecordingProgress(0);
+      setEncodeProgress(0);
+      setExportOpen(false);
+      if (perfBeforeRecordRef.current !== null) {
+        setPerfMode(perfBeforeRecordRef.current);
+        perfBeforeRecordRef.current = null;
+      }
+    }
+  }, [repoName, perfMode, showWebGL, timeline, updateRecordingProgress, handleEncodingStart]);
+
+  const handleToggleExport = useCallback(() => {
+    if (recording || encoding) return;
+    setExportOpen((open) => !open);
+  }, [recording, encoding]);
+
+  const handleWebGLFailed = useCallback(() => {
+    setWebglFailed(true);
+    setUseWebGL(false);
+  }, []);
+
   useEffect(() => {
     const onKey = (ev) => {
       if (ev.target.matches('input, select, textarea')) return;
-      if (ev.code === 'Escape') handleCloseInspector();
-      else if (ev.code === 'Space' && !selectedPath) { ev.preventDefault(); timeline.toggle(); }
-      else if (ev.code === 'ArrowRight') timeline.seek(timeline.index + 1);
+      if (ev.code === 'Escape') {
+        if (recording) handleStopRecord();
+        else if (encoding) { /* wait for encode to finish */ }
+        else if (exportOpen) setExportOpen(false);
+        else handleCloseInspector();
+      } else if (ev.code === 'Space' && !selectedPath && !recording) {
+        ev.preventDefault();
+        timeline.toggle();
+      } else if (ev.code === 'ArrowRight') timeline.seek(timeline.index + 1);
       else if (ev.code === 'ArrowLeft') timeline.seek(timeline.index - 1);
       else if (ev.code === 'Digit1') setStyle('galaxy');
       else if (ev.code === 'Digit2') setStyle('organic');
@@ -147,31 +256,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [timeline, selectedPath, handleCloseInspector]);
-
-  const handleStartRecord = async (opts) => {
-    const canvas = stageRef.current?.querySelector('canvas');
-    if (!canvas) return;
-    setRecording(true);
-    timeline.restart();
-    setTimeout(() => timeline.play(), 200);
-    const total = timeline.commits.length;
-    await startRecording({
-      canvas,
-      opts,
-      onProgress: setRecordingProgress,
-      isComplete: () => timelineRef.current.index >= total - 1,
-      repo: dataset.repo,
-    });
-    setRecording(false);
-    setRecordingProgress(0);
-    setExportOpen(false);
-  };
-
-  const handleWebGLFailed = useCallback(() => {
-    setWebglFailed(true);
-    setUseWebGL(false);
-  }, []);
+  }, [timeline, selectedPath, handleCloseInspector, recording, exportOpen, handleStopRecord]);
 
   if (loading || !dataset) {
     return (
@@ -206,8 +291,19 @@ export default function App() {
         dataset={dataset}
         source={source}
         currentCommit={currentCommit}
-        onOpenExport={() => setExportOpen(true)}
+        exportOpen={exportOpen}
+        onToggleExport={handleToggleExport}
+        onCloseExport={() => setExportOpen(false)}
         recording={recording}
+        recordingProgress={recordingProgress}
+        encoding={encoding}
+        encodeProgress={encodeProgress}
+        encodeFormat={encodeFormat}
+        recordingPlaying={timeline.playing}
+        onStartRecord={handleStartRecord}
+        onStopRecord={handleStopRecord}
+        onPauseRecord={handlePauseRecord}
+        useWebGL={showWebGL}
         branchView={branchView}
         onBranchViewChange={setBranchView}
         branchSupported={branchSupported}
@@ -220,6 +316,8 @@ export default function App() {
           path={selectedPath}
           state={timeline.state}
           commits={timeline.commits}
+          palette={palette}
+          style={style}
           onSeek={timeline.seek}
           onSelectPath={setSelectedPath}
           onClose={handleCloseInspector}
@@ -247,15 +345,6 @@ export default function App() {
         onPerfModeChange={setPerfMode}
         visibleCount={visibleCount}
       />
-
-      <ExportModal
-        open={exportOpen}
-        onClose={() => setExportOpen(false)}
-        onStartRecord={handleStartRecord}
-        recording={recording}
-        recordingProgress={recordingProgress}
-      />
     </div>
   );
 }
-

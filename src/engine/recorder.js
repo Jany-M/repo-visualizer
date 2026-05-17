@@ -1,148 +1,151 @@
-/**
- * Canvas recorder. Captures the active visualizer canvas to a WebM stream
- * via MediaRecorder, or saves a PNG snapshot of the current frame.
- *
- * GIF export is exposed via the same API but requires the gif.js library;
- * if it's not present we fall back to WebM with a console hint.
- */
-
-export async function startRecording({ canvas, opts, onProgress, isComplete, repo }) {
-  if (opts.format === 'png') {
-    return savePngSnapshot(canvas, repo);
-  }
-
-  if (opts.format === 'gif') {
-    return recordGif(canvas, opts, onProgress, isComplete, repo);
-  }
-
-  return recordWebm(canvas, opts, onProgress, isComplete, repo);
-}
-
-// ---------- WebM via MediaRecorder ----------------------------------------
-
-async function recordWebm(canvas, opts, onProgress, isComplete, repo) {
-  if (typeof canvas.captureStream !== 'function') {
-    throw new Error('canvas.captureStream is not supported in this browser');
-  }
-  const stream = canvas.captureStream(opts.fps);
-  const mimeCandidates = [
-    'video/webm;codecs=vp9',
-    'video/webm;codecs=vp8',
-    'video/webm',
-  ];
-  const mimeType = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || 'video/webm';
-
-  const recorder = new MediaRecorder(stream, {
-    mimeType,
-    videoBitsPerSecond: opts.resolution >= 1440 ? 14_000_000 : opts.resolution >= 1080 ? 9_000_000 : 5_000_000,
-  });
-
-  const chunks = [];
-  recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-
-  await new Promise((resolve) => {
-    recorder.onstart = resolve;
-    recorder.start(250);
-  });
-
-  // Wait for the timeline to complete
-  const start = performance.now();
-  const maxMs = 5 * 60 * 1000;
-  await new Promise((resolve) => {
-    const check = () => {
-      const elapsed = performance.now() - start;
-      onProgress(Math.min(1, elapsed / (60 * 1000))); // crude progress until isComplete
-      if (isComplete() || elapsed > maxMs) {
-        resolve();
-      } else {
-        setTimeout(check, 200);
-      }
-    };
-    check();
-  });
-
-  // Give the visualizer a beat to settle and capture the final state
-  await new Promise((r) => setTimeout(r, 1500));
-
-  await new Promise((resolve) => {
-    recorder.onstop = resolve;
-    recorder.stop();
-    stream.getTracks().forEach((t) => t.stop());
-  });
-
-  onProgress(1);
-  const blob = new Blob(chunks, { type: mimeType });
-  downloadBlob(blob, `${repo || 'repo-visualizer'}-timeline.webm`);
-}
-
-// ---------- PNG snapshot ---------------------------------------------------
-
-async function savePngSnapshot(canvas, repo) {
-  const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
-  downloadBlob(blob, `${repo || 'repo-visualizer'}-frame.png`);
-}
-
-// ---------- GIF (optional, requires gif.js loaded externally) -------------
-
-async function recordGif(canvas, opts, onProgress, isComplete, repo) {
-  // Try to dynamically import gif.js from CDN
-  let GIF;
-  try {
-    // eslint-disable-next-line no-new-func
-    await new Promise((resolve, reject) => {
-      if (window.GIF) return resolve();
-      const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js';
-      s.onload = resolve;
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
-    GIF = window.GIF;
-  } catch (e) {
-    console.warn('Could not load gif.js — falling back to WebM');
-    return recordWebm(canvas, opts, onProgress, isComplete, repo);
-  }
-
-  const gif = new GIF({
-    workers: 2,
-    quality: 8,
-    width: canvas.width,
-    height: canvas.height,
-    workerScript: 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js',
-  });
-
-  const frameInterval = 1000 / opts.fps;
-  let lastFrame = 0;
-  let frameCount = 0;
-  const maxFrames = 600;
-
-  const captureLoop = setInterval(() => {
-    const now = performance.now();
-    if (now - lastFrame >= frameInterval) {
-      gif.addFrame(canvas, { copy: true, delay: frameInterval });
-      lastFrame = now;
-      frameCount++;
-      onProgress(Math.min(0.5, frameCount / maxFrames));
-    }
-    if (isComplete() || frameCount >= maxFrames) {
-      clearInterval(captureLoop);
-      gif.on('progress', (p) => onProgress(0.5 + p * 0.5));
-      gif.on('finished', (blob) => {
-        onProgress(1);
-        downloadBlob(blob, `${repo || 'repo-visualizer'}-timeline.gif`);
-      });
-      gif.render();
-    }
-  }, frameInterval);
-}
+import GIF from 'gif.js/dist/gif.js';
+import gifWorkerUrl from 'gif.js/dist/gif.worker.js?url';
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
-  document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  URL.revokeObjectURL(url);
+}
+
+function waitForEvent(target, event) {
+  return new Promise((resolve) => target.addEventListener(event, resolve, { once: true }));
+}
+
+function waitMs(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function waitUntil(check, intervalMs = 100) {
+  return new Promise((resolve) => {
+    const tick = () => {
+      if (check()) resolve();
+      else setTimeout(tick, intervalMs);
+    };
+    tick();
+  });
+}
+
+function captureFrame(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('Failed to capture frame'));
+    }, 'image/png');
+  });
+}
+
+/** Canvas context tuned for repeated getImageData (gif.js). */
+function createReadbackContext(width, height) {
+  const el = document.createElement('canvas');
+  el.width = width;
+  el.height = height;
+  const ctx = el.getContext('2d', { willReadFrequently: true });
+  return { el, ctx };
+}
+
+async function recordWebm(canvas, opts, onCaptureProgress, onEncodeProgress, onEncodingStart, shouldStop, repo) {
+  const stream = canvas.captureStream(opts.fps);
+  const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+    ? 'video/webm;codecs=vp9'
+    : 'video/webm';
+  const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+  const chunks = [];
+
+  recorder.ondataavailable = (e) => {
+    if (e.data.size > 0) chunks.push(e.data);
+  };
+
+  recorder.start(200);
+
+  const progressTimer = setInterval(() => onCaptureProgress?.(), 100);
+  await waitUntil(() => shouldStop(), 100);
+  clearInterval(progressTimer);
+  onCaptureProgress?.();
+
+  onEncodingStart?.('webm');
+  onEncodeProgress?.(0.08);
+
+  recorder.stop();
+  await waitForEvent(recorder, 'stop');
+  onEncodeProgress?.(0.55);
+
+  const blob = new Blob(chunks, { type: mime });
+  onEncodeProgress?.(0.92);
+  downloadBlob(blob, `${repo?.name || 'repo'}-history.webm`);
+  onEncodeProgress?.(1);
+}
+
+async function recordGif(canvas, opts, onCaptureProgress, onEncodeProgress, onEncodingStart, shouldStop, repo) {
+  const gif = new GIF({
+    workers: 2,
+    quality: 10,
+    width: canvas.width,
+    height: canvas.height,
+    workerScript: gifWorkerUrl,
+  });
+
+  const { ctx: readbackCtx } = createReadbackContext(canvas.width, canvas.height);
+  const frameDelay = Math.round(1000 / opts.fps);
+  const maxFrames = 300;
+  let frames = 0;
+
+  while (!shouldStop() && frames < maxFrames) {
+    readbackCtx.drawImage(canvas, 0, 0);
+    gif.addFrame(readbackCtx, { copy: true, delay: frameDelay });
+    frames += 1;
+    onCaptureProgress?.();
+    await waitMs(frameDelay);
+  }
+
+  if (frames === 0) {
+    throw new Error('No frames captured');
+  }
+
+  onEncodingStart?.('gif');
+
+  return new Promise((resolve, reject) => {
+    gif.on('progress', (p) => onEncodeProgress?.(p));
+    gif.on('finished', (blob) => {
+      onEncodeProgress?.(1);
+      downloadBlob(blob, `${repo?.name || 'repo'}-history.gif`);
+      resolve();
+    });
+    gif.on('error', reject);
+    onEncodeProgress?.(0);
+    gif.render();
+  });
+}
+
+/**
+ * Record or snapshot the stage canvas.
+ * @param {() => void} [params.onCaptureProgress] - timeline capture ticks
+ * @param {(n: number) => void} [params.onEncodeProgress] - 0–1 while building file
+ * @param {(format: 'webm'|'gif') => void} [params.onEncodingStart] - capture finished, encode begun
+ */
+export async function startRecording({
+  canvas,
+  opts,
+  onCaptureProgress,
+  onEncodeProgress,
+  onEncodingStart,
+  shouldStop,
+  repo,
+}) {
+  if (!canvas) throw new Error('No canvas found on stage');
+
+  if (opts.format === 'png') {
+    const blob = await captureFrame(canvas);
+    downloadBlob(blob, `${repo?.name || 'repo'}-frame.png`);
+    return;
+  }
+
+  if (opts.format === 'gif') {
+    await recordGif(canvas, opts, onCaptureProgress, onEncodeProgress, onEncodingStart, shouldStop, repo);
+    return;
+  }
+
+  await recordWebm(canvas, opts, onCaptureProgress, onEncodeProgress, onEncodingStart, shouldStop, repo);
 }

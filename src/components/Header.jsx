@@ -1,4 +1,5 @@
 import React from 'react';
+import ExportPanel from './ExportPanel.jsx';
 
 const GITHUB_URL = 'https://github.com/Jany-M/repo-visualizer';
 const AUTHOR_URL = 'https://www.shambix.com/';
@@ -25,14 +26,29 @@ export default function Header({
   dataset,
   source,
   currentCommit,
-  onOpenExport,
+  exportOpen,
+  onToggleExport,
+  onCloseExport,
   recording,
+  recordingProgress,
+  encoding,
+  encodeProgress,
+  encodeFormat,
+  recordingPlaying,
+  onStartRecord,
+  onStopRecord,
+  onPauseRecord,
+  useWebGL,
   branchView = false,
   onBranchViewChange,
   branchSupported = false,
 }) {
   if (!dataset) return null;
   const ts = currentCommit ? new Date(currentCommit.date) : null;
+  const recPct = Math.round(Math.min(1, Math.max(0, recordingProgress)) * 100);
+  const encPct = Math.round(Math.min(1, Math.max(0, encodeProgress)) * 100);
+  const encodeLabel = encodeFormat === 'gif' ? 'GIF' : 'video';
+
   return (
     <header className="header">
       <div className="brand">
@@ -85,18 +101,77 @@ export default function Header({
             {ts.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
           </div>
         )}
-        {onOpenExport && (
-          <button
-            type="button"
-            className="btn export-btn header-export-btn"
-            onClick={onOpenExport}
-            disabled={recording}
-            title="Export timeline as video or GIF"
-          >
-            <span className="icon"><ExportIcon /></span>
-            Export
-          </button>
-        )}
+        <div className="header-export-wrap">
+          <div className="header-export-toolbar">
+            {encoding ? (
+              <div className="header-export-encoding" aria-live="polite">
+                <span className="header-export-encoding-label">
+                  Creating {encodeLabel}… {encPct}%
+                </span>
+                <div
+                  className="header-export-encoding-bar"
+                  role="progressbar"
+                  aria-valuenow={encPct}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  <div
+                    className="header-export-encoding-bar-fill"
+                    style={{ width: `${encPct}%` }}
+                  />
+                </div>
+              </div>
+            ) : recording ? (
+              <>
+                <button
+                  type="button"
+                  className="btn export-btn header-export-btn is-recording"
+                  disabled
+                  aria-live="polite"
+                >
+                  <span className="rec-pulse" aria-hidden />
+                  Recording {recPct}%
+                </button>
+                <button
+                  type="button"
+                  className="btn header-export-btn"
+                  onClick={onPauseRecord}
+                  title={recordingPlaying ? 'Pause timeline' : 'Resume timeline'}
+                >
+                  {recordingPlaying ? 'Pause' : 'Resume'}
+                </button>
+                <button
+                  type="button"
+                  className="btn header-export-btn btn-danger"
+                  onClick={onStopRecord}
+                  title="Stop and download"
+                >
+                  Stop
+                </button>
+              </>
+            ) : (
+              onToggleExport && (
+                <button
+                  type="button"
+                  className={`btn export-btn header-export-btn${exportOpen ? ' is-active' : ''}`}
+                  onClick={onToggleExport}
+                  title="Export timeline as video or GIF"
+                >
+                  <span className="icon"><ExportIcon /></span>
+                  Export
+                </button>
+              )
+            )}
+          </div>
+          {!recording && !encoding && (
+            <ExportPanel
+              open={exportOpen}
+              onClose={onCloseExport}
+              onStartRecord={onStartRecord}
+              useWebGL={useWebGL}
+            />
+          )}
+        </div>
       </div>
     </header>
   );
