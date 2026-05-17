@@ -5,6 +5,10 @@
 > import knitting the architecture together, every commit a pulse of light
 > rippling through the system.
 
+**Live demo** [repovisualizer.netlify.app](https://repovisualizer.netlify.app/) ships the bundled demo dataset only.
+
+[![Netlify Status](https://api.netlify.com/api/v1/badges/ed135e10-b4bd-4683-ae2a-8d3e46ff95ac/deploy-status)](https://app.netlify.com/projects/repovisualizer/deploys)
+
 Repo Visualizer reads a git repository's full history, extracts the import
 graph between files at every commit, and renders the evolving structure as
 an animated force-directed network. Each top-level directory is a feature
@@ -80,6 +84,31 @@ Supported languages for import-graph extraction (lightweight regex parsers):
 Files in other languages still appear as nodes (sized by churn) — they just
 don't contribute edges to the import graph.
 
+Documentation paths are **skipped** (`.md`, `.mdx`, `.rst`, and similar) so the graph focuses on code evolution, not README or docs churn. The `.github` folder (workflows, issue templates, etc.) is also excluded.
+
+### Custom exclude paths
+
+Copy `repovisualizer.config.example.json` into the **repository you analyze** as `repovisualizer.config.json` and list paths or globs to skip:
+
+```json
+{
+  "exclude": [
+    "dist/**",
+    "build/**",
+    "**/*.test.ts",
+    "**/*.generated.ts",
+    "legacy/**"
+  ]
+}
+
+Patterns match repo-relative paths: plain entries like `vendor` or `legacy/` match that folder prefix; `*` matches one path segment; `**` matches any depth.
+
+The analyzer loads this automatically from the target repo root. Override the file location with:
+
+```bash
+npm run analyze -- /path/to/your/repo --config=/path/to/repovisualizer.config.json
+```
+
 ---
 
 ## Keyboard shortcuts
@@ -92,6 +121,9 @@ don't contribute edges to the import graph.
 | `2` | Organic theme |
 | `3` | Neural theme |
 | `4` | Minimal theme |
+| `Esc` | Clear node selection |
+
+**Canvas:** scroll to zoom, drag to pan. Use **Auto fit** (on by default) to keep the growing graph in view while playing. Click a node to inspect its imports and commit history.
 
 ---
 
@@ -175,17 +207,28 @@ repo-visualizer/
 
 ---
 
+## Deployment
+
+| Target | What runs |
+| --- | --- |
+| **Netlify** | Static build (`npm run build`) with the bundled demo. See `netlify.toml`. |
+| **Local** | Full app: `npm run analyze -- /path/to/your/repo` then `npm run dev`. No server or in-project cloning required. |
+
+---
+
 ## Roadmap
 
-The current build is a working prototype focused on visual quality and the
-end-to-end flow (load → animate → export). Logical next steps:
+Shipped in this build:
 
-- **WebGL renderer** for repos with 5,000+ nodes (currently fine up to ~1,500).
-- **Click-to-inspect** a node to see its commit history and inbound/outbound deps.
-- **AI feature labeling** — group commits into named features ("auth rewrite",
-  "checkout v2") via an LLM pass over commit messages and diffs.
-- **Branch-aware view** — show forks and merges as the graph diverges and rejoins.
-- **GitHub URL input** — paste a public repo URL and analyze it server-side.
+- Growth visibility (nodes appear as commits advance), faster timeline seek, virtualized scrubber
+- Canvas zoom/pan and auto-fit while playing
+- Click-to-inspect nodes (imports + commit touches)
+- Optional WebGL renderer when node count is high (Canvas fallback if unavailable)
+- Branch-aware layout toggle (re-analyze repo to include parent metadata)
+
+Still open:
+
+- **AI feature labeling** — group commits into named features via an LLM pass
 
 ---
 

@@ -65,8 +65,7 @@ function buildDataset() {
   const c = [];
 
   // Bootstrap
-  c.push(mk('Initial commit — README and license', 'Ada Voss', [
-    { p: 'README.md', a: 40, s: 'A' },
+  c.push(mk('Initial commit — project scaffold', 'Ada Voss', [
     { p: 'LICENSE', a: 21, s: 'A' },
     { p: 'package.json', a: 18, s: 'A' },
   ]));
@@ -262,12 +261,6 @@ function buildDataset() {
     { p: 'src/web/pages/Admin.tsx', a: 150, s: 'A', i: ['src/web/components/index.ts', 'src/web/api-client.ts'] },
     { p: 'src/web/router.tsx', a: 4, r: 1, i: ['src/web/pages/Dashboard.tsx', 'src/web/pages/Billing.tsx', 'src/web/forms/SignupForm.tsx', 'src/web/forms/LoginForm.tsx', 'src/web/pages/Admin.tsx'] },
   ]));
-  c.push(mk('Docs: architecture and API guides', 'Ada Voss', [
-    { p: 'docs/getting-started.md', a: 120, s: 'A' },
-    { p: 'docs/architecture.md', a: 200, s: 'A' },
-    { p: 'docs/api.md', a: 180, s: 'A' },
-  ]));
-
   return {
     repo: 'demo-saas',
     generatedAt: new Date().toISOString(),
