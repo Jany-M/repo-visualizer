@@ -1,20 +1,76 @@
 import React from 'react';
-import { getDepsForPath, getTouchCommitsForPath } from '../engine/graphState.js';
+import { getDepsForPath, getTouchCommitsForPath, topLevelDir } from '../engine/graphState.js';
+import { clusterColorFor } from '../engine/colors.js';
 
-function DepList({ items, emptyLabel, onSelect }) {
-  if (items.length === 0) {
-    return <ul><li className="muted">{emptyLabel}</li></ul>;
-  }
+const NO_IMPORTS_HELP =
+  'No import links for this file at the current commit. Scrub the timeline toward the end of the project, or re-run npm run analyze -- /path/to/repo so changes include resolvedImports (JS/TS, Python, Go, and other supported languages).';
+
+function clusterForPath(state, filePath) {
+  return state.nodes.get(filePath)?.dir
+    ?? state.cluster.get(filePath)
+    ?? topLevelDir(filePath);
+}
+
+function folderBadgeStyle(palette, cluster, style) {
+  const c = clusterColorFor(palette, cluster, style);
+  return {
+    background: c.core,
+    color: style === 'minimal' ? 'rgba(255, 255, 255, 0.92)' : 'rgba(6, 6, 13, 0.88)',
+    borderColor: c.edge,
+  };
+}
+
+function InfoIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.25" />
+      <path d="M8 7.25V11" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+      <circle cx="8" cy="5.25" r="0.75" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ImportInfoIcon() {
+  return (
+    <span className="node-inspector-info-wrap">
+      <button
+        type="button"
+        className="node-inspector-info"
+        aria-label={NO_IMPORTS_HELP}
+      >
+        <InfoIcon />
+      </button>
+      <span className="node-inspector-info-tip" role="tooltip">
+        {NO_IMPORTS_HELP}
+      </span>
+    </span>
+  );
+}
+
+function DepList({ items, onSelect, state, palette, style }) {
+  if (items.length === 0) return null;
   return (
     <ul className="node-inspector-deps">
-      {items.map((path) => (
-        <li key={path}>
-          <button type="button" className="dep-link" onClick={() => onSelect(path)}>
-            <span className="dep-name">{path.split('/').pop()}</span>
-            <span className="dep-path">{path}</span>
-          </button>
-        </li>
-      ))}
+      {items.map((filePath) => {
+        const folder = clusterForPath(state, filePath);
+        return (
+          <li key={filePath}>
+            <button type="button" className="dep-link" onClick={() => onSelect(filePath)}>
+              <span className="dep-row">
+                <span
+                  className="dep-folder-badge"
+                  style={folderBadgeStyle(palette, folder, style)}
+                  title={folder}
+                >
+                  {folder}
+                </span>
+                <span className="dep-name">{filePath.split('/').pop()}</span>
+              </span>
+              <span className="dep-path">{filePath}</span>
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -23,6 +79,8 @@ export default function NodeInspector({
   path,
   state,
   commits,
+  palette,
+  style,
   onSeek,
   onSelectPath,
   onClose,
@@ -40,7 +98,10 @@ export default function NodeInspector({
   return (
     <aside className="node-inspector" role="dialog" aria-label="File details">
       <div className="node-inspector-header">
-        <h3 className="node-inspector-path">{path}</h3>
+        <div className="node-inspector-title-row">
+          <h3 className="node-inspector-path">{path}</h3>
+          {!hasGraph && <ImportInfoIcon />}
+        </div>
         <button type="button" className="node-inspector-close" onClick={onClose} aria-label="Close">
           ×
         </button>
@@ -52,37 +113,32 @@ export default function NodeInspector({
           <span>churn {Math.round(graphNode.churn)}</span>
         </div>
       )}
-      {!hasGraph && (
-        <p className="node-inspector-empty">
-          No import links for this file at the current commit. Scrub the timeline toward the end
-          of the project, or re-run{' '}
-          <code>npm run analyze -- /path/to/repo</code> so changes include{' '}
-          <code>resolvedImports</code> (JS/TS, Python, Go, and other supported languages).
-        </p>
+      {dependsOn.length > 0 && (
+        <section className="node-inspector-section">
+          <h4>Depends on ({dependsOn.length})</h4>
+          <p className="node-inspector-hint">Files this module imports</p>
+          <DepList
+            items={dependsOn}
+            onSelect={onSelectPath}
+            state={state}
+            palette={palette}
+            style={style}
+          />
+        </section>
       )}
-      {hasGraph && (
-        <p className="node-inspector-hint node-inspector-focus-hint">
-          Connected files glow on the graph; everything else is dimmed.
-        </p>
+      {importedIn.length > 0 && (
+        <section className="node-inspector-section">
+          <h4>Imported in ({importedIn.length})</h4>
+          <p className="node-inspector-hint">Files that import this module</p>
+          <DepList
+            items={importedIn}
+            onSelect={onSelectPath}
+            state={state}
+            palette={palette}
+            style={style}
+          />
+        </section>
       )}
-      <section className="node-inspector-section">
-        <h4>Depends on ({outbound.length})</h4>
-        <p className="node-inspector-hint">Files this module imports</p>
-        <DepList
-          items={dependsOn}
-          emptyLabel="No imports resolved"
-          onSelect={onSelectPath}
-        />
-      </section>
-      <section className="node-inspector-section">
-        <h4>Imported in ({inbound.length})</h4>
-        <p className="node-inspector-hint">Files that import this module</p>
-        <DepList
-          items={importedIn}
-          emptyLabel="Nothing imports this file yet"
-          onSelect={onSelectPath}
-        />
-      </section>
       <section className="node-inspector-section">
         <h4>Recent touches</h4>
         <ul className="node-inspector-commits">
