@@ -1,86 +1,127 @@
 /**
  * Drives playback over a commit list. Returns the current commit index,
- * playback controls, and a stable reference to a "frame info" object the
- * visualizer can read on every animation frame.
+ * playback controls, and a stable reference to graph state.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { applyCommit, emptyState, rebuildToCommit } from './graphState.js';
+import { applyCommit, emptyState, rebuildToCommit, revertCommit } from './graphState.js';
 
 const SPEEDS = {
-  '0.5x': 1100,
-  '1x':   600,
-  '2x':   320,
-  '4x':   160,
-  '8x':   80,
+  '0.5x': 2200,
+  '1x':   1200,
+  '2x':   640,
+  '4x':   320,
+  '8x':   160,
 };
+
+const INCREMENTAL_SEEK_MAX = 40;
 
 export function useTimeline(dataset) {
   const commits = dataset?.commits ?? [];
+  const commitsRef = useRef(commits);
+  commitsRef.current = commits;
+
   const [index, setIndex] = useState(-1);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState('1x');
+  const [stateVersion, setStateVersion] = useState(0);
   const stateRef = useRef(emptyState());
   const lastAdvanceRef = useRef(0);
   const onAdvanceListeners = useRef(new Set());
 
-  // Recompute graph state when index changes (handles seek)
-  const reseedState = useCallback((targetIdx) => {
-    stateRef.current = rebuildToCommit(commits, targetIdx);
-  }, [commits]);
+  const bumpState = useCallback(() => setStateVersion((v) => v + 1), []);
 
-  // Imperative step forward — call inside RAF loop
+  // Reset when dataset changes
+  useEffect(() => {
+    stateRef.current = emptyState();
+    setIndex(-1);
+    setPlaying(false);
+    bumpState();
+  }, [dataset?.repo, commits.length, bumpState]);
+
   const stepForward = useCallback(() => {
-    if (index >= commits.length - 1) {
+    const list = commitsRef.current;
+    if (index >= list.length - 1) {
       setPlaying(false);
       return false;
     }
     const nextIdx = index + 1;
-    applyCommit(stateRef.current, commits[nextIdx], nextIdx);
+    applyCommit(stateRef.current, list[nextIdx], nextIdx);
     setIndex(nextIdx);
+    bumpState();
     onAdvanceListeners.current.forEach((cb) => cb(nextIdx, stateRef.current));
     return true;
-  }, [commits, index]);
+  }, [index, bumpState]);
 
-  const play  = useCallback(() => {
-    if (index >= commits.length - 1) {
-      // Restart from beginning
+  const stepBackward = useCallback(() => {
+    const list = commitsRef.current;
+    if (index < 0) return false;
+    revertCommit(stateRef.current, list[index], index);
+    const prev = index - 1;
+    stateRef.current.lastCommit = prev >= 0 ? list[prev] : null;
+    setIndex(prev);
+    bumpState();
+    onAdvanceListeners.current.forEach((cb) => cb(prev, stateRef.current));
+    return true;
+  }, [index, bumpState]);
+
+  const play = useCallback(() => {
+    if (index >= commitsRef.current.length - 1) {
       stateRef.current = emptyState();
       setIndex(-1);
+      bumpState();
     }
     setPlaying(true);
-  }, [commits.length, index]);
+  }, [index, bumpState]);
 
   const pause = useCallback(() => setPlaying(false), []);
+
   const toggle = useCallback(() => {
-    if (playing) {
-      setPlaying(false);
-    } else {
-      play();
-    }
-  }, [playing, play]);
+    if (playing) pause();
+    else play();
+  }, [playing, play, pause]);
 
   const seek = useCallback((targetIdx) => {
-    const clamped = Math.max(-1, Math.min(commits.length - 1, targetIdx));
-    reseedState(clamped);
+    const list = commitsRef.current;
+    const clamped = Math.max(-1, Math.min(list.length - 1, targetIdx));
+    const current = index;
+
+    if (clamped === current) return;
+
+    const delta = clamped - current;
+
+    if (Math.abs(delta) <= INCREMENTAL_SEEK_MAX) {
+      if (delta > 0) {
+        for (let i = current + 1; i <= clamped; i++) {
+          applyCommit(stateRef.current, list[i], i);
+        }
+      } else {
+        for (let i = current; i > clamped; i--) {
+          revertCommit(stateRef.current, list[i], i);
+        }
+      }
+    } else {
+      stateRef.current = rebuildToCommit(list, clamped);
+    }
+
+    stateRef.current.lastCommit = clamped >= 0 ? list[clamped] : null;
     setIndex(clamped);
+    bumpState();
     onAdvanceListeners.current.forEach((cb) => cb(clamped, stateRef.current));
-  }, [commits.length, reseedState]);
+  }, [index, bumpState]);
 
   const restart = useCallback(() => {
     stateRef.current = emptyState();
     setIndex(-1);
     setPlaying(false);
-  }, []);
+    bumpState();
+  }, [bumpState]);
 
-  // RAF loop for playback timing
   useEffect(() => {
     if (!playing) return;
     let raf;
-    let lastTime = performance.now();
-    lastAdvanceRef.current = lastTime;
     const tick = (now) => {
-      const dur = SPEEDS[speed] ?? 600;
+      const dur = SPEEDS[speed] ?? 1200;
       if (now - lastAdvanceRef.current >= dur) {
         const ok = stepForward();
         lastAdvanceRef.current = now;
@@ -88,6 +129,7 @@ export function useTimeline(dataset) {
       }
       raf = requestAnimationFrame(tick);
     };
+    lastAdvanceRef.current = performance.now();
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [playing, speed, stepForward]);
@@ -104,13 +146,18 @@ export function useTimeline(dataset) {
     speed,
     speeds: Object.keys(SPEEDS),
     state: stateRef.current,
+    stateVersion,
     play,
     pause,
     toggle,
     seek,
+    stepBackward,
     setSpeed,
     restart,
     onAdvance,
     progress: commits.length > 0 ? Math.max(0, (index + 1) / commits.length) : 0,
-  }), [commits, index, playing, speed, play, pause, toggle, seek, restart, onAdvance]);
+  }), [
+    commits, index, playing, speed, stateVersion,
+    play, pause, toggle, seek, stepBackward, restart, onAdvance,
+  ]);
 }

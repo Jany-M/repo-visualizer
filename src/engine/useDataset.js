@@ -1,6 +1,5 @@
 /**
- * Loads the repo's history JSON. Tries the analyzer-produced
- * `public/data/history.json` first; falls back to a bundled demo dataset.
+ * Loads history JSON or falls back to bundled demo.
  */
 
 import { useEffect, useState } from 'react';
@@ -13,6 +12,8 @@ export function useDataset() {
 
   useEffect(() => {
     let cancelled = false;
+    setSource('loading');
+
     fetch('/data/history.json')
       .then((r) => {
         if (!r.ok) throw new Error('no analyzer output');
@@ -22,14 +23,17 @@ export function useDataset() {
         if (cancelled) return;
         setDataset(d);
         setSource('analyzer');
+        setError(null);
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return;
         setDataset(bundledDemo);
         setSource('demo');
+        setError(err.message);
       });
+
     return () => { cancelled = true; };
   }, []);
 
-  return { dataset, source, error };
+  return { dataset, source, error, loading: source === 'loading' };
 }

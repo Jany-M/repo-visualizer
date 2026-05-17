@@ -16,59 +16,67 @@ export function hslCss(h, s, l, a = 1) {
   return `hsla(${h}, ${s}%, ${l}%, ${a})`;
 }
 
+/** Resolve palette map entry (number legacy or { hue, variant }). */
+export function paletteEntry(palette, cluster) {
+  const raw = palette?.get(cluster);
+  if (raw == null) return { hue: 0, variant: 0 };
+  if (typeof raw === 'number') return { hue: raw, variant: 0 };
+  return raw;
+}
+
+function variantShifts(variant) {
+  const tier = variant % 3;
+  return {
+    light: tier === 0 ? 0 : tier === 1 ? 9 : -7,
+    sat: (variant % 2) * 7,
+  };
+}
+
 /**
  * Convert a cluster hue to a per-style color profile so each visualizer
  * can apply consistent identity while preserving its aesthetic.
  */
-export function clusterColor(hue, style) {
+export function clusterColor(hue, style, variant = 0) {
+  const { light, sat } = variantShifts(variant);
   switch (style) {
     case 'galaxy':
-      // Bright stars with cool/warm bias — saturated, high luminance core
       return {
-        core:   hslCss(hue, 95, 78, 1),
-        glow:   hslCss(hue, 90, 65, 0.55),
-        glowFar:hslCss(hue, 90, 55, 0.18),
-        edge:   hslCss(hue, 80, 70, 0.34),
-        ripple: hslCss(hue, 90, 75, 0.85),
+        core:   hslCss(hue, 95 + sat, 78 + light, 1),
+        glow:   hslCss(hue, 90 + sat, 65 + light, 0.55),
+        glowFar:hslCss(hue, 90 + sat, 55 + light, 0.18),
+        edge:   hslCss(hue, 80 + sat, 70 + light, 0.34),
+        ripple: hslCss(hue, 90 + sat, 75 + light, 0.85),
       };
     case 'organic':
-      // Bioluminescent — cyan/green/aqua biased even off-hue
       return {
-        core:   hslCss((hue * 0.4 + 160) % 360, 90, 70, 1),
-        glow:   hslCss((hue * 0.4 + 160) % 360, 85, 55, 0.5),
-        glowFar:hslCss((hue * 0.4 + 160) % 360, 85, 45, 0.18),
-        edge:   hslCss((hue * 0.4 + 160) % 360, 70, 60, 0.42),
-        ripple: hslCss((hue * 0.4 + 160) % 360, 95, 70, 0.9),
+        core:   hslCss(hue, 72 + sat, 58 + light, 0.88),
+        glow:   hslCss(hue, 68 + sat, 46 + light, 0.28),
+        glowFar:hslCss(hue, 62 + sat, 38 + light, 0.1),
+        edge:   hslCss(hue, 58 + sat, 48 + light, 0.28),
+        ripple: hslCss(hue, 75 + sat, 55 + light, 0.45),
       };
     case 'neural':
-      // Sharp neon — magenta/cyan binary
-      const accent = (hue % 360 < 180) ? 320 : 175;
       return {
-        core:   hslCss(accent, 100, 70, 1),
-        glow:   hslCss(accent, 100, 60, 0.6),
-        glowFar:hslCss(accent, 100, 50, 0.2),
-        edge:   hslCss(accent, 100, 60, 0.6),
-        ripple: hslCss(accent, 100, 75, 1),
+        core:   hslCss(hue, 100, 68 + light, 1),
+        glow:   hslCss(hue, 95 + sat, 55 + light, 0.55),
+        glowFar:hslCss(hue, 90 + sat, 45 + light, 0.18),
+        edge:   hslCss(hue, 100, 58 + light, 0.55),
+        ripple: hslCss(hue, 100, 72 + light, 0.85),
       };
     case 'minimal':
-      // Editorial — restrained ink palette
-      const inks = [
-        'rgba(15, 17, 22, 0.92)',
-        'rgba(195, 84, 49, 0.92)',
-        'rgba(40, 78, 138, 0.92)',
-        'rgba(120, 89, 32, 0.92)',
-        'rgba(75, 95, 70, 0.92)',
-        'rgba(110, 50, 110, 0.92)',
-      ];
-      const idx = Math.floor((hue / 360) * inks.length) % inks.length;
       return {
-        core:   inks[idx],
-        glow:   inks[idx].replace('0.92', '0.18'),
-        glowFar:inks[idx].replace('0.92', '0.06'),
-        edge:   inks[idx].replace('0.92', '0.32'),
-        ripple: inks[idx].replace('0.92', '0.5'),
+        core:   hslCss(hue, 42 + sat, 32 + light, 0.92),
+        glow:   hslCss(hue, 38 + sat, 42 + light, 0.16),
+        glowFar:hslCss(hue, 35 + sat, 50 + light, 0.06),
+        edge:   hslCss(hue, 40 + sat, 38 + light, 0.34),
+        ripple: hslCss(hue, 45 + sat, 36 + light, 0.48),
       };
     default:
-      return clusterColor(hue, 'galaxy');
+      return clusterColor(hue, 'galaxy', variant);
   }
+}
+
+export function clusterColorFor(palette, cluster, style) {
+  const { hue, variant } = paletteEntry(palette, cluster);
+  return clusterColor(hue, style, variant);
 }
