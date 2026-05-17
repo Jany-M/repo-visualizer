@@ -9,6 +9,8 @@
 
 [![Netlify Status](https://api.netlify.com/api/v1/badges/ed135e10-b4bd-4683-ae2a-8d3e46ff95ac/deploy-status)](https://app.netlify.com/projects/repovisualizer/deploys)
 
+[![Repo Visualizer](https://s13.gifyu.com/images/b7DXJ.gif)](https://gifyu.com/image/b7DXJ)
+
 Repo Visualizer reads a git repository's full history, extracts the import
 graph between files at every commit, and renders the evolving structure as
 an animated force-directed network. Each top-level directory is a feature

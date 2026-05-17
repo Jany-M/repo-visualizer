@@ -8,3 +8,5 @@ public/data/*.json
 *.log
 /.cursor
 repovisualizer.config.json
+repo-visualizer.gif
+repo-visualizer.png
