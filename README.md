@@ -68,40 +68,53 @@ For very large repos, limit to recent commits:
 npm run analyze -- /path/to/your/repo --max=300
 ```
 
-Supported languages for import-graph extraction (lightweight regex parsers):
+### Languages detected by the analyzer
 
-| Language | Extensions |
+The analyzer parses **imports** on changed files and resolves them to other paths in the repo. Supported languages (see `scripts/importParsers.mjs`):
+
+| Language | Extensions | How imports are resolved |
+| --- | --- | --- |
+| JavaScript / TypeScript | `.js` `.jsx` `.ts` `.tsx` `.mjs` `.cjs` `.vue` `.svelte` | Relative paths; `tsconfig` / `jsconfig` `paths` aliases |
+| Python | `.py` | Relative (`from .`, `from ..`), dotted modules, `__init__.py` package index |
+| Go | `.go` | Import path suffix → file under repo |
+| Rust | `.rs` | `use` / `mod`; `crate::`, `super::`, `self::` |
+| Java / Kotlin | `.java` `.kt` | FQCN and simple class name |
+| Ruby | `.rb` | `require` / `require_relative` |
+| PHP | `.php` | `use`, `require`/`include`, `__DIR__` joins, dotted namespace paths |
+| CSS / SCSS / Sass / Less | `.css` `.scss` `.sass` `.less` | `@import` |
+
+Any other file type still appears as a **node** (sized by churn) but does not add import **edges**. Re-run `npm run analyze` after upgrading the analyzer so `history.json` picks up improved resolution.
+
+### Auto-excluded paths (every repo)
+
+These are applied automatically on every analyze run — no config required (`scripts/defaultExcludes.mjs`):
+
+| Category | Examples |
 | --- | --- |
-| JavaScript / TypeScript | `.js .jsx .ts .tsx .mjs .cjs .vue .svelte` |
-| Python | `.py` |
-| Go | `.go` |
-| Rust | `.rs` |
-| Java / Kotlin | `.java .kt` |
-| Ruby | `.rb` |
-| PHP | `.php` |
-| CSS / SCSS | `.css .scss` |
-
-Files in other languages still appear as nodes (sized by churn) — they just
-don't contribute edges to the import graph.
-
-Documentation paths are **skipped** (`.md`, `.mdx`, `.rst`, and similar) so the graph focuses on code evolution, not README or docs churn. The `.github` folder (workflows, issue templates, etc.) is also excluded.
+| Dependencies | `node_modules/`, `vendor/`, `bower_components/` |
+| Build output | `dist/`, `build/`, `out/`, `target/`, `bin/`, `obj/`, `.next/`, `.nuxt/`, `.svelte-kit/` |
+| Caches / tooling | `__pycache__/`, `.venv/`, `venv/`, `.tox/`, `.pytest_cache/`, `.turbo/`, `.parcel-cache/`, `.cache/`, `.idea/` |
+| Deploy artifacts | `.output/`, `.vercel/`, `.netlify/` |
+| Tests & fixtures | `**/*.test.ts`, `**/*.spec.js`, `**/__fixtures__/**`, `**/__snapshots__/**` |
+| Generated / minified | `**/*.min.js`, `**/*.bundle.js`, `**/*.generated.ts` |
+| Docs (by extension) | `.md`, `.mdx`, `.rst`, `.adoc`, … |
+| CI templates | `.github/` (path segment) |
 
 ### Custom exclude paths
 
-Copy `repovisualizer.config.example.json` into the **repository you analyze** as `repovisualizer.config.json` and list paths or globs to skip:
+Add repo-specific patterns in `repovisualizer.config.json` in the **repository you analyze** (merged on top of the built-in list):
 
 ```json
 {
   "exclude": [
-    "dist/**",
-    "build/**",
-    "**/*.test.ts",
-    "**/*.generated.ts",
-    "legacy/**"
+    "legacy/**",
+    "docs/**",
+    "public/**"
   ]
 }
+```
 
-Patterns match repo-relative paths: plain entries like `vendor` or `legacy/` match that folder prefix; `*` matches one path segment; `**` matches any depth.
+Patterns match repo-relative paths: plain entries like `legacy` match that folder prefix; `*` matches one path segment; `**` matches any depth.
 
 The analyzer loads this automatically from the target repo root. Override the file location with:
 
@@ -229,12 +242,6 @@ Shipped in this build:
 Still open:
 
 - **AI feature labeling** — group commits into named features via an LLM pass
-
----
-
-## License
-
-MIT
 
 ---
 
