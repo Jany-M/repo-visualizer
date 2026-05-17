@@ -235,3 +235,19 @@ Still open:
 ## License
 
 MIT
+
+---
+
+## Author
+
+Jany Martelli
+
+- https://www.shambix.com
+- info@shambix.com
+- https://www.linkedin.com/in/janymartelli/
+
+---
+
+Check out our latest product: [Patcherly](https://patcherly.com), catch live production bugs & fix them in real time, in seconds.
+
+**Currently in Free Private Beta!**
