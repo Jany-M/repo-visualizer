@@ -1,6 +1,10 @@
 import React, { useRef } from 'react';
 import { useVisualizerCore } from './useVisualizerCore.js';
-import { clusterColor } from '../engine/colors.js';
+import { clusterColorFor } from '../engine/colors.js';
+import {
+  applyNodeAlpha, drawHighlightLinks, drawSelectionRing, linkAlpha,
+  nodeDrawRadius, safeRadius, shouldDrawRipple, shouldGlow,
+} from './drawHelpers.js';
 
 /**
  * Minimal / Editorial visualizer.
@@ -9,13 +13,13 @@ import { clusterColor } from '../engine/colors.js';
  * typography labels on the largest nodes. Reads like a New York Times
  * Upshot piece — quiet, considered, information-dense.
  */
-export default function MinimalVisualizer({ state, commitIndex, palette }) {
+export default function MinimalVisualizer({
+  state, commitIndex, palette, autoFit, selectedPath, onNodeClick, branchLanes, cameraApiRef,
+}) {
   const hostRef = useRef(null);
 
   useVisualizerCore({
-    hostRef,
-    state,
-    commitIndex,
+    hostRef, state, commitIndex, autoFit, selectedPath, onNodeClick, branchLanes, cameraApiRef,
     clearStrategy: 'full',
     background: '#f7f5f0',
     draw: (ctx, frame) => drawMinimal(ctx, frame, { palette }),
@@ -54,7 +58,9 @@ function drawMinimal(ctx, frame, { palette }) {
   for (const link of links) {
     const a = link.source, b = link.target;
     if (!a || !b) continue;
-    ctx.strokeStyle = 'rgba(15, 17, 22, 0.16)';
+    const la = linkAlpha(frame, a.path, b.path);
+    ctx.globalAlpha = la;
+    ctx.strokeStyle = la > 0.5 ? 'rgba(15, 17, 22, 0.28)' : 'rgba(15, 17, 22, 0.06)';
     ctx.lineWidth = 0.6 + Math.min(1.2, link.weight * 0.25);
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
@@ -64,12 +70,15 @@ function drawMinimal(ctx, frame, { palette }) {
 
   // -------- 4. Nodes as ink dots --------
   for (const n of nodes) {
-    if (n.deleted) continue;
-    const hue = palette.get(n.dir) ?? 0;
-    const c = clusterColor(hue, 'minimal');
+    applyNodeAlpha(ctx, n, frame);
+    const c = clusterColorFor(palette, n.dir, 'minimal');
+    if (shouldGlow(n, frame)) {
+      drawSelectionRing(ctx, n, frame, c.core);
+    }
     ctx.fillStyle = c.core;
+    const nr = safeRadius(nodeDrawRadius(n, frame) * 0.55, 0.5);
     ctx.beginPath();
-    ctx.arc(n.x, n.y, n.r * 0.55, 0, Math.PI * 2);
+    ctx.arc(n.x, n.y, nr, 0, Math.PI * 2);
     ctx.fill();
 
     // Thin outer outline for the largest nodes for emphasis
@@ -77,27 +86,29 @@ function drawMinimal(ctx, frame, { palette }) {
       ctx.strokeStyle = c.core;
       ctx.lineWidth = 0.8;
       ctx.beginPath();
-      ctx.arc(n.x, n.y, n.r * 0.55 + 4, 0, Math.PI * 2);
+      ctx.arc(n.x, n.y, nr + 4, 0, Math.PI * 2);
       ctx.stroke();
     }
   }
 
+  drawHighlightLinks(ctx, frame, palette, 'minimal', clusterColorFor);
+
   // -------- 5. Concentric ring ripples (no glow) --------
   const nodeByPath = new Map(nodes.map((n) => [n.path, n]));
   for (const ripple of ripples) {
+    if (!shouldDrawRipple(ripple.path, frame)) continue;
     const n = nodeByPath.get(ripple.path);
     if (!n) continue;
-    const t = ripple.progress;
+    const t = Math.max(0, Math.min(1, ripple.progress ?? 0));
     const easeOut = 1 - Math.pow(1 - t, 3);
-    const maxR = 60 + 100 * ripple.intensity;
-    const hue = palette.get(n.dir) ?? 0;
-    const c = clusterColor(hue, 'minimal');
+    const maxR = 60 + 100 * (ripple.intensity ?? 0);
+    const c = clusterColorFor(palette, n.dir, 'minimal');
 
     for (let k = 0; k < 3; k++) {
       const phase = Math.min(1, easeOut + k * 0.18);
-      const r = phase * maxR;
+      const r = safeRadius(phase * maxR, 0);
       const alpha = (1 - t) * 0.5 * (1 - phase);
-      if (alpha <= 0) continue;
+      if (alpha <= 0 || r < 0.5) continue;
       ctx.strokeStyle = c.core.replace(/0\.92\)$/, `${alpha.toFixed(3)})`);
       ctx.lineWidth = 0.8;
       ctx.beginPath();
@@ -113,7 +124,7 @@ function drawMinimal(ctx, frame, { palette }) {
   // Find largest node per cluster
   const largestPerCluster = new Map();
   for (const n of nodes) {
-    if (n.deleted) continue;
+    applyNodeAlpha(ctx, n, frame);
     const cur = largestPerCluster.get(n.dir);
     if (!cur || n.r > cur.r) largestPerCluster.set(n.dir, n);
   }

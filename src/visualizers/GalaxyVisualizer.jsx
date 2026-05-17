@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useVisualizerCore } from './useVisualizerCore.js';
-import { clusterColor } from '../engine/colors.js';
+import { clusterColorFor } from '../engine/colors.js';
+import {
+  applyNodeAlpha, drawHighlightLinks, drawSelectionRing, linkAlpha,
+  nodeDrawRadius, safeRadius, shouldDrawRipple, shouldGlow,
+} from './drawHelpers.js';
 
 /**
  * Galaxy / Cosmic visualizer.
@@ -9,7 +13,16 @@ import { clusterColor } from '../engine/colors.js';
  * star-nodes, luminous orbital connection lines, and supernova-style ripples
  * radiating from each commit's touched files.
  */
-export default function GalaxyVisualizer({ state, commitIndex, palette }) {
+export default function GalaxyVisualizer({
+  state,
+  commitIndex,
+  palette,
+  autoFit,
+  selectedPath,
+  onNodeClick,
+  branchLanes,
+  cameraApiRef,
+}) {
   const hostRef = useRef(null);
 
   // Pre-generate a deterministic starfield once. The same stars persist
@@ -47,6 +60,11 @@ export default function GalaxyVisualizer({ state, commitIndex, palette }) {
     commitIndex,
     clearStrategy: 'full',
     background: '#03040a',
+    autoFit,
+    selectedPath,
+    onNodeClick,
+    branchLanes,
+    cameraApiRef,
     draw: (ctx, frame) => drawGalaxy(ctx, frame, { stars, nebulae, palette }),
   });
 
@@ -78,7 +96,7 @@ function drawGalaxy(ctx, frame, { stars, nebulae, palette }) {
     const alpha = (0.25 + 0.5 * s.z) * twinkle;
     ctx.fillStyle = `rgba(${200 + Math.floor(s.z * 55)}, ${210 + Math.floor(s.z * 35)}, 255, ${alpha})`;
     ctx.beginPath();
-    ctx.arc(sx, sy, s.r * s.z, 0, Math.PI * 2);
+    ctx.arc(sx, sy, safeRadius(s.r * s.z, 0.1), 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -88,16 +106,16 @@ function drawGalaxy(ctx, frame, { stars, nebulae, palette }) {
     const a = link.source;
     const b = link.target;
     if (!a || !b) continue;
-    const hueA = palette.get(a.dir) ?? 0;
-    const hueB = palette.get(b.dir) ?? 0;
-    const cA = clusterColor(hueA, 'galaxy');
-    const cB = clusterColor(hueB, 'galaxy');
+    const la = linkAlpha(frame, a.path, b.path);
+    if (la < 0.05) continue;
+    const cA = clusterColorFor(palette, a.dir, 'galaxy');
+    const cB = clusterColorFor(palette, b.dir, 'galaxy');
     const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
     grad.addColorStop(0, cA.edge);
     grad.addColorStop(1, cB.edge);
     ctx.strokeStyle = grad;
     ctx.lineWidth = 0.6 + Math.min(2.2, link.weight * 0.6);
-    ctx.globalAlpha = 0.8;
+    ctx.globalAlpha = 0.8 * la;
     // Slightly curved line for arc feel
     const mx = (a.x + b.x) / 2;
     const my = (a.y + b.y) / 2;
@@ -117,11 +135,11 @@ function drawGalaxy(ctx, frame, { stars, nebulae, palette }) {
   // -------- 4. Node glow halos (additive) --------
   ctx.globalCompositeOperation = 'lighter';
   for (const n of nodes) {
-    if (n.deleted) continue;
-    const hue = palette.get(n.dir) ?? 0;
-    const c = clusterColor(hue, 'galaxy');
-    const r = n.r;
-    const haloR = r * 5.5;
+    if (!shouldGlow(n, frame)) continue;
+    applyNodeAlpha(ctx, n, frame);
+    const c = clusterColorFor(palette, n.dir, 'galaxy');
+    const r = nodeDrawRadius(n, frame);
+    const haloR = safeRadius(r * 5.5, r);
 
     const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, haloR);
     grad.addColorStop(0, c.glow);
@@ -136,10 +154,9 @@ function drawGalaxy(ctx, frame, { stars, nebulae, palette }) {
   // -------- 5. Node cores --------
   ctx.globalCompositeOperation = 'lighter';
   for (const n of nodes) {
-    if (n.deleted) continue;
-    const hue = palette.get(n.dir) ?? 0;
-    const c = clusterColor(hue, 'galaxy');
-    const r = n.r;
+    applyNodeAlpha(ctx, n, frame);
+    const c = clusterColorFor(palette, n.dir, 'galaxy');
+    const r = nodeDrawRadius(n, frame);
 
     // Bright inner core gradient
     const core = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r);
@@ -150,21 +167,25 @@ function drawGalaxy(ctx, frame, { stars, nebulae, palette }) {
     ctx.beginPath();
     ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
     ctx.fill();
+    drawSelectionRing(ctx, n, frame);
   }
+
+  drawHighlightLinks(ctx, frame, palette, 'galaxy', clusterColorFor);
 
   // -------- 6. Ripple shockwaves --------
   ctx.globalCompositeOperation = 'lighter';
   const nodeByPath = new Map(nodes.map((n) => [n.path, n]));
   for (const ripple of ripples) {
+    if (!shouldDrawRipple(ripple.path, frame)) continue;
     const n = nodeByPath.get(ripple.path);
     if (!n) continue;
-    const t = ripple.progress;
+    const t = Math.max(0, Math.min(1, ripple.progress ?? 0));
     const ease = 1 - Math.pow(1 - t, 2);
-    const maxR = 50 + 120 * ripple.intensity;
-    const r = ease * maxR;
-    const alpha = (1 - t) * (0.6 + 0.4 * ripple.intensity);
-    const hue = palette.get(n.dir) ?? 0;
-    const c = clusterColor(hue, 'galaxy');
+    const maxR = 50 + 120 * (ripple.intensity ?? 0);
+    const r = safeRadius(ease * maxR, 0);
+    if (r < 0.5) continue;
+    const alpha = Math.max(0, (1 - t) * (0.6 + 0.4 * (ripple.intensity ?? 0)));
+    const c = clusterColorFor(palette, n.dir, 'galaxy');
 
     // Outer wave
     ctx.strokeStyle = c.ripple.replace(/,[\d.]+\)$/, `,${alpha.toFixed(3)})`);
@@ -185,7 +206,7 @@ function drawGalaxy(ctx, frame, { stars, nebulae, palette }) {
     // Brief flash sprite on the node itself for the first 20% of the ripple
     if (t < 0.2) {
       const flashAlpha = (1 - t / 0.2);
-      const flashR = n.r * 3 * (1 + (1 - t));
+      const flashR = safeRadius(nodeDrawRadius(n, frame) * 3 * (1 + (1 - t)), 0.5);
       const flashGrad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, flashR);
       flashGrad.addColorStop(0, `rgba(255, 255, 255, ${flashAlpha * 0.85})`);
       flashGrad.addColorStop(0.4, c.ripple);

@@ -1,6 +1,10 @@
 import React, { useRef } from 'react';
 import { useVisualizerCore } from './useVisualizerCore.js';
-import { clusterColor } from '../engine/colors.js';
+import { clusterColorFor } from '../engine/colors.js';
+import {
+  applyNodeAlpha, drawHighlightLinks, drawSelectionRing, linkAlpha,
+  nodeDrawRadius, safeRadius, shouldDrawRipple, shouldGlow,
+} from './drawHelpers.js';
 
 /**
  * Neural / Circuit visualizer.
@@ -9,13 +13,13 @@ import { clusterColor } from '../engine/colors.js';
  * octagonal nodes light up and emit hexagonal shockwaves on commits.
  * High-contrast, tech-forward, dashboard-grade aesthetic.
  */
-export default function NeuralVisualizer({ state, commitIndex, palette }) {
+export default function NeuralVisualizer({
+  state, commitIndex, palette, autoFit, selectedPath, onNodeClick, branchLanes, cameraApiRef,
+}) {
   const hostRef = useRef(null);
 
   useVisualizerCore({
-    hostRef,
-    state,
-    commitIndex,
+    hostRef, state, commitIndex, autoFit, selectedPath, onNodeClick, branchLanes, cameraApiRef,
     clearStrategy: 'full',
     background: '#04060c',
     draw: (ctx, frame) => drawNeural(ctx, frame, { palette }),
@@ -46,7 +50,8 @@ function drawNeural(ctx, frame, { palette }) {
   // -------- 2. Highlight grid spots near nodes --------
   ctx.globalCompositeOperation = 'lighter';
   for (const n of nodes) {
-    if (n.deleted) continue;
+    if (!shouldGlow(n, frame)) continue;
+    applyNodeAlpha(ctx, n, frame);
     const gx = Math.round(n.x / step) * step;
     const gy = Math.round(n.y / step) * step;
     const dist = Math.hypot(n.x - gx, n.y - gy);
@@ -60,9 +65,10 @@ function drawNeural(ctx, frame, { palette }) {
   for (const link of links) {
     const a = link.source, b = link.target;
     if (!a || !b) continue;
-    const hue = palette.get(a.dir) ?? 0;
-    const c = clusterColor(hue, 'neural');
+    const la = linkAlpha(frame, a.path, b.path);
+    const c = clusterColorFor(palette, a.dir, 'neural');
 
+    ctx.globalAlpha = la;
     ctx.strokeStyle = c.edge;
     ctx.lineWidth = 1 + Math.min(1.6, link.weight * 0.4);
     ctx.beginPath();
@@ -100,16 +106,17 @@ function drawNeural(ctx, frame, { palette }) {
     ctx.beginPath();
     ctx.arc(px, py, 8, 0, Math.PI * 2);
     ctx.fill();
+    ctx.globalAlpha = 1;
   }
 
   // -------- 4. Node glow --------
   ctx.globalCompositeOperation = 'lighter';
   for (const n of nodes) {
-    if (n.deleted) continue;
-    const hue = palette.get(n.dir) ?? 0;
-    const c = clusterColor(hue, 'neural');
-    const r = n.r;
-    const haloR = r * 4.5;
+    if (!shouldGlow(n, frame)) continue;
+    applyNodeAlpha(ctx, n, frame);
+    const c = clusterColorFor(palette, n.dir, 'neural');
+    const r = nodeDrawRadius(n, frame);
+    const haloR = safeRadius(r * 4.5, r);
     const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, haloR);
     grad.addColorStop(0, c.glow);
     grad.addColorStop(0.4, c.glowFar);
@@ -123,25 +130,28 @@ function drawNeural(ctx, frame, { palette }) {
   // -------- 5. Hex / octagon nodes --------
   ctx.globalCompositeOperation = 'source-over';
   for (const n of nodes) {
-    if (n.deleted) continue;
-    const hue = palette.get(n.dir) ?? 0;
-    const c = clusterColor(hue, 'neural');
-    drawHex(ctx, n.x, n.y, n.r, c);
+    applyNodeAlpha(ctx, n, frame);
+    const c = clusterColorFor(palette, n.dir, 'neural');
+    drawHex(ctx, n.x, n.y, nodeDrawRadius(n, frame), c);
+    drawSelectionRing(ctx, n, frame, 'rgba(0, 255, 234, 0.95)');
   }
+
+  drawHighlightLinks(ctx, frame, palette, 'neural', clusterColorFor);
 
   // -------- 6. Hexagonal shockwaves --------
   ctx.globalCompositeOperation = 'lighter';
   const nodeByPath = new Map(nodes.map((n) => [n.path, n]));
   for (const ripple of ripples) {
+    if (!shouldDrawRipple(ripple.path, frame)) continue;
     const n = nodeByPath.get(ripple.path);
     if (!n) continue;
-    const t = ripple.progress;
+    const t = Math.max(0, Math.min(1, ripple.progress ?? 0));
     const ease = 1 - Math.pow(1 - t, 2);
-    const maxR = 60 + 130 * ripple.intensity;
-    const r = ease * maxR;
+    const maxR = 60 + 130 * (ripple.intensity ?? 0);
+    const r = safeRadius(ease * maxR, 0);
+    if (r < 0.5) continue;
     const alpha = (1 - t) * 0.9;
-    const hue = palette.get(n.dir) ?? 0;
-    const c = clusterColor(hue, 'neural');
+    const c = clusterColorFor(palette, n.dir, 'neural');
 
     ctx.strokeStyle = c.ripple.replace(/,[\d.]+\)$/, `,${alpha.toFixed(3)})`);
     ctx.lineWidth = 1.5;
