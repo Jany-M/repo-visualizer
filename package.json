@@ -1,0 +1,23 @@
+{
+  "name": "repo-visualizer",
+  "version": "0.1.0",
+  "description": "An animated, cinematic visualization of a git repository's evolution over time.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "analyze": "node scripts/analyze.mjs",
+    "make-demo": "node scripts/make-demo.mjs"
+  },
+  "dependencies": {
+    "d3-force": "^3.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "simple-git": "^3.27.0",
+    "vite": "^5.4.10"
+  }
+}
