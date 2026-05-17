@@ -1,23 +1,29 @@
 import React, { useMemo, useRef } from 'react';
 
+const MAX_TICKS = 64;
+
 /**
- * Interactive scrubber that shows the full commit history as a track with
- * a draggable progress handle. Ticks mark milestones (every 10th commit).
+ * Interactive scrubber — milestone ticks only (virtualized for large histories).
  */
 export default function Timeline({ commits, index, onSeek }) {
   const trackRef = useRef(null);
 
   const ticks = useMemo(() => {
+    if (!commits.length) return [];
+    const n = commits.length;
+    const step = Math.max(1, Math.ceil(n / MAX_TICKS));
     const out = [];
-    if (!commits.length) return out;
-    for (let i = 0; i < commits.length; i++) {
-      const isMajor = i % 10 === 0 || i === commits.length - 1;
-      out.push({ i, isMajor, pct: (i / Math.max(1, commits.length - 1)) * 100 });
+    for (let i = 0; i < n; i += step) {
+      const isMajor = i % 10 === 0 || i === n - 1 || i === 0;
+      out.push({ i, isMajor, pct: (i / Math.max(1, n - 1)) * 100 });
+    }
+    if (out[out.length - 1]?.i !== n - 1) {
+      out.push({ i: n - 1, isMajor: true, pct: 100 });
     }
     return out;
   }, [commits.length]);
 
-  const handleClick = (ev) => {
+  const seekFromEvent = (ev) => {
     const rect = trackRef.current.getBoundingClientRect();
     const x = ev.clientX - rect.left;
     const pct = Math.max(0, Math.min(1, x / rect.width));
@@ -25,16 +31,19 @@ export default function Timeline({ commits, index, onSeek }) {
     onSeek(idx);
   };
 
+  const handleClick = (ev) => seekFromEvent(ev);
+
   const handleDrag = (ev) => {
     if (ev.buttons !== 1) return;
-    handleClick(ev);
+    seekFromEvent(ev);
   };
 
-  const progress = index < 0 ? 0 : ((index) / Math.max(1, commits.length - 1)) * 100;
+  const progress = index < 0 ? 0 : (index / Math.max(1, commits.length - 1)) * 100;
 
   const firstDate = commits[0]?.date && new Date(commits[0].date);
   const lastDate = commits[commits.length - 1]?.date && new Date(commits[commits.length - 1].date);
-  const midDate = commits[Math.floor(commits.length / 2)]?.date && new Date(commits[Math.floor(commits.length / 2)].date);
+  const midDate = commits[Math.floor(commits.length / 2)]?.date
+    && new Date(commits[Math.floor(commits.length / 2)].date);
 
   const fmt = (d) => d ? d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }) : '';
 

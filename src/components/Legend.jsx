@@ -1,13 +1,13 @@
 import React from 'react';
-import { clusterColor } from '../engine/colors.js';
+import { clusterColorFor } from '../engine/colors.js';
+import { isNodeVisible } from '../engine/visibility.js';
 
-export default function Legend({ state, palette, style }) {
+export default function Legend({ state, palette, style, commitIndex = Infinity }) {
   if (!state || !state.clusters.size) return null;
 
-  // Count nodes per cluster
   const counts = new Map();
   for (const node of state.nodes.values()) {
-    if (node.deleted) continue;
+    if (!isNodeVisible(node, commitIndex)) continue;
     counts.set(node.dir, (counts.get(node.dir) || 0) + 1);
   }
 
@@ -19,8 +19,7 @@ export default function Legend({ state, palette, style }) {
     <div className="legend">
       <h4>Feature clusters</h4>
       {items.map(([cluster, count]) => {
-        const hue = palette.get(cluster) ?? 0;
-        const color = clusterColor(hue, style);
+        const color = clusterColorFor(palette, cluster, style);
         return (
           <div className="legend-item" key={cluster}>
             <span className="legend-dot" style={{ background: color.core, color: color.core }} />

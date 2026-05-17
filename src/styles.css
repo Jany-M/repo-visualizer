@@ -128,6 +128,30 @@ button:focus-visible {
   box-shadow: 0 0 12px var(--accent-hot);
 }
 
+.brand-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-github {
+  display: flex;
+  align-items: center;
+  color: var(--fg-muted);
+  transition: color 0.15s ease;
+}
+
+.brand-github:hover { color: var(--fg); }
+
+.brand-author {
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+
+.brand-author:hover { color: var(--accent); }
+
+.brand-sep { opacity: 0.5; }
+
 .brand-sub {
   font-size: 11px;
   font-weight: 500;
@@ -136,12 +160,280 @@ button:focus-visible {
   color: var(--fg-dim);
 }
 
+.notice-banner {
+  position: absolute;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-card);
+}
+
+.notice-banner button {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--fg-dim);
+  padding: 0 4px;
+}
+
+.node-inspector {
+  position: absolute;
+  top: 100px;
+  right: 28px;
+  z-index: 12;
+  width: 300px;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 16px 18px;
+  backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-card);
+  font-size: 12px;
+}
+
+.node-inspector-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.node-inspector-path {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.node-inspector-close {
+  font-size: 20px;
+  line-height: 1;
+  color: var(--fg-dim);
+  flex-shrink: 0;
+}
+
+.node-inspector-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  margin-bottom: 12px;
+}
+
+.node-inspector-section h4 {
+  margin: 0 0 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--fg-dim);
+}
+
+.node-inspector-hint {
+  margin: 0 0 8px;
+  font-size: 10px;
+  color: var(--fg-dim);
+  line-height: 1.4;
+}
+
+.node-inspector-focus-hint {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(138, 180, 255, 0.1);
+  border: 1px solid rgba(138, 180, 255, 0.2);
+  color: var(--fg-muted);
+}
+
+.node-inspector-empty {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-muted);
+  background: rgba(255, 200, 120, 0.08);
+  border: 1px solid rgba(255, 200, 120, 0.2);
+  border-radius: 8px;
+}
+
+.node-inspector-empty code {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg);
+}
+
+.node-inspector-deps .dep-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+.node-inspector-deps .dep-link:hover {
+  background: var(--bg-elevated);
+  border-color: var(--hairline);
+}
+
+.node-inspector-deps .dep-name {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.node-inspector-deps .dep-path {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--fg-dim);
+  margin-top: 2px;
+  word-break: break-all;
+}
+
+.node-inspector-section ul {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.node-inspector-section li.muted { color: var(--fg-dim); font-style: italic; }
+
+.node-inspector-commits button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.node-inspector-commits .sha {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  margin-right: 8px;
+}
+
+.node-inspector-commits .msg {
+  color: var(--fg-muted);
+}
+
+.zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.btn-sm {
+  padding: 4px 10px !important;
+  font-size: 14px;
+  min-width: 28px;
+}
+
+.toggle-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-dim);
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-chip input { accent-color: var(--accent); }
+
+.perf-select,
+.speed-control select {
+  color-scheme: dark;
+  accent-color: var(--accent);
+}
+
+.perf-select option,
+.speed-control select option {
+  background-color: #121624;
+  color: var(--fg);
+}
+
+.app[data-style='minimal'] .perf-select,
+.app[data-style='minimal'] .speed-control select {
+  color-scheme: light;
+}
+
+.app[data-style='minimal'] .perf-select option,
+.app[data-style='minimal'] .speed-control select option {
+  background-color: #f7f5f0;
+  color: var(--fg);
+}
+
+.perf-select {
+  font-size: 10px;
+  padding: 4px 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  cursor: pointer;
+}
+
+.perf-select:focus {
+  outline: none;
+  border-color: var(--hairline-strong);
+  color: var(--fg);
+}
+
+.commit-counter .node-count { font-size: 10px; }
+
 .repo-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   text-align: right;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--fg-muted);
   line-height: 1.5;
+  gap: 4px;
+}
+
+.header-export-btn {
+  margin-top: 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 7px 14px;
+}
+
+.header-export-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.app[data-style='minimal'] .header-export-btn {
+  background: rgba(15, 17, 22, 0.06);
+  border-color: var(--hairline-strong);
+  color: var(--fg);
 }
 
 .repo-meta .repo-name {
@@ -416,16 +708,23 @@ button:focus-visible {
 }
 
 .speed-control select {
-  background: none;
+  background: transparent;
   border: none;
   color: var(--fg);
   font-family: var(--font-mono);
   font-size: 12px;
-  padding: 4px 8px;
+  padding: 4px 8px 4px 4px;
   cursor: pointer;
+  min-width: 3.2em;
 }
 
-.speed-control select:focus { outline: none; }
+.speed-control select:hover {
+  color: var(--fg);
+}
+
+.speed-control select:focus {
+  outline: none;
+}
 
 .style-picker {
   display: inline-flex;

@@ -22,14 +22,6 @@ const RestartIcon = () => (
   </svg>
 );
 
-const ExportIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M8 11V2" />
-    <path d="M4 6l4-4 4 4" />
-    <rect x="2" y="11" width="12" height="3" rx="1" />
-  </svg>
-);
-
 export default function ControlBar({
   commits,
   index,
@@ -42,16 +34,26 @@ export default function ControlBar({
   onRestart,
   style,
   onStyleChange,
-  onOpenExport,
+  autoFit,
+  onAutoFitChange,
+  onZoomIn,
+  onZoomOut,
+  onZoomReset,
+  branchView,
+  onBranchViewChange,
+  branchSupported,
+  perfMode,
+  onPerfModeChange,
+  visibleCount,
 }) {
   return (
     <div className="control-bar">
       <Timeline commits={commits} index={index} onSeek={onSeek} />
       <div className="control-row">
-        <button className="btn" onClick={onRestart} title="Restart">
+        <button className="btn" onClick={onRestart} title="Restart" type="button">
           <span className="icon"><RestartIcon /></span>
         </button>
-        <button className="btn btn-play" onClick={onTogglePlay} title={playing ? 'Pause' : 'Play'}>
+        <button className="btn btn-play" onClick={onTogglePlay} title={playing ? 'Pause' : 'Play'} type="button">
           {playing ? <PauseIcon /> : <PlayIcon />}
         </button>
         <div className="speed-control">
@@ -60,16 +62,38 @@ export default function ControlBar({
             {speeds.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
+        <div className="zoom-control" title="Canvas zoom">
+          <button type="button" className="btn btn-sm" onClick={onZoomOut}>−</button>
+          <button type="button" className="btn btn-sm" onClick={onZoomReset} title="Reset view">◎</button>
+          <button type="button" className="btn btn-sm" onClick={onZoomIn}>+</button>
+        </div>
+        <label className="toggle-chip" title="Auto zoom to fit graph while playing">
+          <input type="checkbox" checked={autoFit} onChange={(e) => onAutoFitChange(e.target.checked)} />
+          Auto fit
+        </label>
+        {branchSupported && (
+          <label className="toggle-chip" title="Spread merge commits across lanes">
+            <input type="checkbox" checked={branchView} onChange={(e) => onBranchViewChange(e.target.checked)} />
+            Branches
+          </label>
+        )}
+        <select
+          className="perf-select"
+          value={perfMode}
+          onChange={(e) => onPerfModeChange(e.target.value)}
+          title="Performance renderer (WebGL when needed)"
+        >
+          <option value="auto">Perf: auto</option>
+          <option value="on">Perf: on</option>
+          <option value="off">Perf: off</option>
+        </select>
         <StylePicker style={style} onChange={onStyleChange} />
         <div className="spacer" />
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)' }}>
+        <div className="commit-counter">
           {index < 0 ? '00' : String(index + 1).padStart(2, '0')}
-          <span style={{ color: 'var(--fg-dim)' }}> / {String(commits.length).padStart(2, '0')}</span>
+          <span className="dim"> / {String(commits.length).padStart(2, '0')}</span>
+          <span className="dim node-count"> · {visibleCount} nodes</span>
         </div>
-        <button className="btn export-btn" onClick={onOpenExport}>
-          <span className="icon"><ExportIcon /></span>
-          Export
-        </button>
       </div>
     </div>
   );
