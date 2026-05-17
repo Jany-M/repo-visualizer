@@ -4,6 +4,7 @@
 
 import path from 'node:path';
 import { matchesExcludePattern } from './matchExclude.mjs';
+import { DEFAULT_EXCLUDE_PATTERNS, DEFAULT_SKIP_SEGMENTS } from './defaultExcludes.mjs';
 
 const DOC_EXTENSIONS = new Set([
   '.md',
@@ -14,10 +15,7 @@ const DOC_EXTENSIONS = new Set([
   '.asciidoc',
 ]);
 
-/** Path prefixes / segments to skip (CI, templates, etc.) */
-const SKIP_SEGMENTS = new Set([
-  '.github',
-]);
+const SKIP_SEGMENTS = new Set(DEFAULT_SKIP_SEGMENTS);
 
 /** User-defined patterns from repovisualizer.config.json */
 let customExcludePatterns = [];
@@ -32,14 +30,19 @@ export function getCustomExcludes() {
   return customExcludePatterns;
 }
 
+/** Built-in patterns applied on every analyze run. */
+export function getDefaultExcludes() {
+  return [...DEFAULT_EXCLUDE_PATTERNS];
+}
+
 /** @param {string} filePath repo-relative path */
 export function shouldIncludeFile(filePath) {
   const norm = filePath.split(path.sep).join('/').replace(/^\.\//, '');
   const ext = path.extname(norm).toLowerCase();
   if (DOC_EXTENSIONS.has(ext)) return false;
-  if (norm === '.github' || norm.startsWith('.github/')) return false;
   const parts = norm.split('/');
   if (parts.some((seg) => SKIP_SEGMENTS.has(seg))) return false;
+  if (matchesExcludePattern(norm, DEFAULT_EXCLUDE_PATTERNS)) return false;
   if (matchesExcludePattern(norm, customExcludePatterns)) return false;
   return true;
 }
