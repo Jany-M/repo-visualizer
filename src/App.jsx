@@ -4,6 +4,7 @@ import { useTimeline } from './engine/useTimeline.js';
 import { clusterPalette, collectAllClusters } from './engine/graphState.js';
 import { isClusterExcluded } from './engine/excludes.js';
 import { countVisibleNodes } from './engine/visibility.js';
+import { primaryRepoAuthor } from './engine/recordingOverlay.js';
 import {
   isWebGLAvailable,
   WEBGL_NODE_THRESHOLD,
@@ -32,7 +33,7 @@ const CANVAS_VISUALIZERS = {
 function loadBool(key, defaultVal) {
   try {
     const v = localStorage.getItem(key);
-    if (v === null) return defaultVal;
+    if (v === null || v === '') return defaultVal;
     return v === 'true';
   } catch {
     return defaultVal;
@@ -65,6 +66,9 @@ export default function App() {
   const compactLayout = isCompactLayout(layoutMode);
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
+  const [commitCardCollapsed, setCommitCardCollapsed] = useState(
+    () => loadBool('rv-commit-card-collapsed', false),
+  );
 
   const stageRef = useRef(null);
   const timelineRef = useRef(timeline);
@@ -95,6 +99,18 @@ export default function App() {
   const excludePatterns = useMemo(() => dataset?.exclude ?? [], [dataset?.exclude]);
 
   const currentCommit = timeline.index >= 0 ? timeline.commits[timeline.index] : null;
+  const repoAuthor = useMemo(
+    () => primaryRepoAuthor(timeline.commits),
+    [timeline.commits],
+  );
+  const recordingOverlay = useMemo(() => {
+    if (!recording) return null;
+    return {
+      repoName: dataset?.repo ?? '',
+      repoAuthor,
+      commitDate: currentCommit?.date ?? null,
+    };
+  }, [recording, dataset?.repo, repoAuthor, currentCommit?.date]);
   const allClusters = useMemo(
     () => collectAllClusters(timeline.commits, excludePatterns),
     [timeline.commits, excludePatterns],
@@ -126,6 +142,7 @@ export default function App() {
   const handleClusterSelect = useCallback((cluster) => {
     if (cluster) {
       pauseForFocus();
+      setSelectedPath(null);
       setSelectedCluster(cluster);
     } else {
       setSelectedCluster(null);
@@ -136,6 +153,7 @@ export default function App() {
   const handleNodeClick = useCallback((path) => {
     if (path) {
       pauseForFocus();
+      setSelectedCluster(null);
       setSelectedPath(path);
     } else {
       setSelectedCluster(null);
@@ -156,6 +174,7 @@ export default function App() {
     excludePatterns,
     onNodeClick: handleNodeClick,
     cameraApiRef,
+    recordingOverlay,
   };
 
   useEffect(() => {
@@ -165,8 +184,32 @@ export default function App() {
   }, [selectedCluster, excludePatterns]);
 
   useEffect(() => {
-    localStorage.setItem('rv-auto-fit', String(autoFit));
+    try {
+      localStorage.setItem('rv-auto-fit', String(autoFit));
+    } catch {
+      /* ignore */
+    }
   }, [autoFit]);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('rv-auto-fit') === null) {
+        localStorage.setItem('rv-auto-fit', 'true');
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!compactLayout) {
+      localStorage.setItem('rv-commit-card-collapsed', String(commitCardCollapsed));
+    }
+  }, [commitCardCollapsed, compactLayout]);
+
+  const toggleCommitCardCollapsed = useCallback(() => {
+    setCommitCardCollapsed((c) => !c);
+  }, []);
 
   useEffect(() => {
     if (compactLayout) {
@@ -287,7 +330,10 @@ export default function App() {
           setSelectedCluster(null);
           handleCloseInspector();
         }
-      } else if (ev.code === 'Space' && !selectedPath && !selectedCluster && !recording) {
+      } else if (ev.code === 'End' && !timeline.buildingFinal && !recording) {
+        ev.preventDefault();
+        timeline.goToFinal();
+      } else if (ev.code === 'Space' && !selectedPath && !selectedCluster && !recording && !timeline.buildingFinal) {
         ev.preventDefault();
         timeline.toggle();
       } else if (ev.code === 'ArrowRight') timeline.seek(timeline.index + 1);
@@ -330,6 +376,23 @@ export default function App() {
         ) : (
           <CanvasVisualizer {...visProps} />
         )}
+        {timeline.buildingFinal && (
+          <div className="final-state-loader" role="status" aria-live="polite">
+            <div className="final-state-loader-card">
+              <div className="final-state-loader-title">Loading final state</div>
+              <div className="final-state-loader-track">
+                <div
+                  className="final-state-loader-bar"
+                  style={{ width: `${Math.round(timeline.buildProgress * 100)}%` }}
+                />
+              </div>
+              <div className="final-state-loader-meta">
+                {Math.round(timeline.buildProgress * 100)}%
+                <span className="dim"> · applying commits in batches</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {webglFailed && !bannerDismissed && (
@@ -342,6 +405,8 @@ export default function App() {
       <Header
         dataset={dataset}
         source={source}
+        commitIndex={timeline.index}
+        commitCount={timeline.commits.length}
         currentCommit={currentCommit}
         exportOpen={exportOpen}
         onToggleExport={handleToggleExport}
@@ -375,7 +440,12 @@ export default function App() {
         }}
       />
       <div className="info-stack">
-        <CommitCard commit={currentCommit} />
+        <CommitCard
+          commit={currentCommit}
+          collapsible={!compactLayout}
+          collapsed={!compactLayout && commitCardCollapsed}
+          onToggleCollapse={toggleCommitCardCollapsed}
+        />
         <Legend
           state={timeline.state}
           palette={palette}
@@ -407,6 +477,10 @@ export default function App() {
         speed={timeline.speed}
         speeds={timeline.speeds}
         onTogglePlay={timeline.toggle}
+        onGoToFinal={timeline.goToFinal}
+        buildingFinal={timeline.buildingFinal}
+        buildProgress={timeline.buildProgress}
+        atFinal={timeline.atFinal}
         onSeek={timeline.seek}
         onSetSpeed={timeline.setSpeed}
         onRestart={timeline.restart}
@@ -419,7 +493,6 @@ export default function App() {
         onZoomReset={() => cameraApiRef.current?.reset()}
         perfMode={perfMode}
         onPerfModeChange={setPerfMode}
-        visibleCount={visibleCount}
       />
     </div>
   );
