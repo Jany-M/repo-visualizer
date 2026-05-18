@@ -11,6 +11,8 @@ import {
   forceY,
   forceCollide,
 } from 'd3-force';
+import { getInboundCounts } from './graphState.js';
+import { isPathExcluded, isClusterExcluded } from './excludes.js';
 import { isNodeVisible, isEdgeVisible } from './visibility.js';
 
 export function createLayout({ width, height }) {
@@ -19,21 +21,13 @@ export function createLayout({ width, height }) {
   const nodeByPath = new Map();
   const clusterCenters = new Map();
   let syncCount = 0;
-  let branchLaneStrength = 0;
-
   const sim = forceSimulation(nodes)
     .force('charge', forceManyBody().strength(-90).distanceMax(420))
     .force('link', forceLink(links).id((d) => d.path).distance(60).strength(0.18))
     .force('center', forceCenter(width / 2, height / 2).strength(0.04))
     .force('collide', forceCollide().radius((d) => d.r + 2).strength(0.85))
     .force('x', forceX((d) => clusterCenters.get(d.dir)?.x ?? width / 2).strength(0.06))
-    .force('y', forceY((d) => {
-      const base = clusterCenters.get(d.dir)?.y ?? height / 2;
-      if (branchLaneStrength > 0 && d.lane != null) {
-        return base + (d.lane - 0.5) * height * 0.35 * branchLaneStrength;
-      }
-      return base;
-    }).strength(0.06))
+    .force('y', forceY((d) => clusterCenters.get(d.dir)?.y ?? height / 2).strength(0.06))
     .alpha(0.4)
     .alphaDecay(0.012)
     .velocityDecay(0.22);
@@ -64,12 +58,20 @@ export function createLayout({ width, height }) {
   }
 
   function sync(state, commitIndex = Infinity, options = {}) {
-    const { branchLanes = null, forceRestart = false } = options;
-    branchLaneStrength = branchLanes ? 1 : 0;
+    const { forceRestart = false, excludePatterns = [] } = options;
     syncCount++;
+    const inboundCounts = getInboundCounts(state);
 
     const seen = new Set();
     for (const [path, n] of state.nodes) {
+      if (isPathExcluded(path, excludePatterns) || isClusterExcluded(n.dir, excludePatterns)) {
+        if (nodeByPath.has(path)) {
+          const idx = nodes.findIndex((nd) => nd.path === path);
+          if (idx >= 0) nodes.splice(idx, 1);
+          nodeByPath.delete(path);
+        }
+        continue;
+      }
       if (!isNodeVisible(n, commitIndex)) {
         if (nodeByPath.has(path)) {
           const idx = nodes.findIndex((nd) => nd.path === path);
@@ -80,7 +82,9 @@ export function createLayout({ width, height }) {
       }
 
       seen.add(path);
-      const churnRadius = 6 + Math.min(28, Math.sqrt(Math.max(10, n.size)) * 1.6);
+      const inbound = inboundCounts.get(path) || 0;
+      const importBoost = Math.min(14, Math.sqrt(inbound) * 2.2);
+      const churnRadius = 6 + Math.min(28, Math.sqrt(Math.max(10, n.size)) * 1.6) + importBoost;
       let node = nodeByPath.get(path);
       if (!node) {
         const center = clusterCenters.get(n.dir) || { x: width / 2, y: height / 2 };
@@ -108,7 +112,6 @@ export function createLayout({ width, height }) {
       node.lastTouchedAt = n.lastTouchedAt;
       node.bornAt = n.bornAt;
       node.deleted = n.deleted;
-      node.lane = branchLanes?.get(path) ?? 0.5;
     }
 
     for (const [path] of nodeByPath) {
@@ -122,6 +125,9 @@ export function createLayout({ width, height }) {
     links.length = 0;
     for (const [, e] of state.edges) {
       if (!isEdgeVisible(e, commitIndex)) continue;
+      if (isPathExcluded(e.from, excludePatterns) || isPathExcluded(e.to, excludePatterns)) {
+        continue;
+      }
       const from = nodeByPath.get(e.from);
       const to = nodeByPath.get(e.to);
       if (from && to) {

@@ -25,10 +25,12 @@ export function paletteEntry(palette, cluster) {
 }
 
 function variantShifts(variant) {
-  const tier = variant % 3;
+  const tier = variant % 5;
+  const lightShifts = [0, 11, -9, 7, -5];
+  const satShifts = [0, 14, -10, 18, -6];
   return {
-    light: tier === 0 ? 0 : tier === 1 ? 9 : -7,
-    sat: (variant % 2) * 7,
+    light: lightShifts[tier],
+    sat: satShifts[tier],
   };
 }
 

@@ -6,6 +6,9 @@
  * fade old activity and pulse on touch.
  */
 
+import { isPathExcluded, isClusterExcluded } from './excludes.js';
+import { isNodeVisible } from './visibility.js';
+
 export function emptyState() {
   return {
     nodes: new Map(),
@@ -84,7 +87,16 @@ function removeAllEdgesForPath(state, path, undoEdges) {
 /**
  * Apply a single commit forward in time. Mutates and returns state.
  */
-export function applyCommit(state, commit, commitIdx) {
+function syncClustersSet(state, excludePatterns = []) {
+  state.clusters.clear();
+  for (const node of state.nodes.values()) {
+    if (!node.deleted && !isClusterExcluded(node.dir, excludePatterns)) {
+      state.clusters.add(node.dir);
+    }
+  }
+}
+
+export function applyCommit(state, commit, commitIdx, excludePatterns = []) {
   state.lastCommit = commit;
   state.commitIndex = commitIdx;
 
@@ -92,9 +104,10 @@ export function applyCommit(state, commit, commitIdx) {
 
   for (const ch of commit.changes) {
     const path = ch.path;
+    if (isPathExcluded(path, excludePatterns)) continue;
+
     const cluster = topLevelDir(path);
     state.cluster.set(path, cluster);
-    state.clusters.add(cluster);
 
     let node = state.nodes.get(path);
     const existed = !!node;
@@ -152,7 +165,7 @@ export function applyCommit(state, commit, commitIdx) {
       }
 
       for (const target of ch.resolvedImports) {
-        if (target === path) continue;
+        if (target === path || isPathExcluded(target, excludePatterns)) continue;
         const key = `${path}→${target}`;
         const existing = state.edges.get(key);
         if (existing) {
@@ -168,6 +181,7 @@ export function applyCommit(state, commit, commitIdx) {
     }
   }
 
+  syncClustersSet(state, excludePatterns);
   state.undoByCommit.set(commitIdx, undo);
   return state;
 }
@@ -175,7 +189,7 @@ export function applyCommit(state, commit, commitIdx) {
 /**
  * Revert a single commit (step backward one index).
  */
-export function revertCommit(state, commit, commitIdx) {
+export function revertCommit(state, commit, commitIdx, excludePatterns = []) {
   const undo = state.undoByCommit.get(commitIdx);
   if (!undo) return state;
 
@@ -206,17 +220,38 @@ export function revertCommit(state, commit, commitIdx) {
 
   state.undoByCommit.delete(commitIdx);
   state.commitIndex = commitIdx - 1;
+  syncClustersSet(state, excludePatterns);
+  return state;
+}
+
+export function pruneExcludedGraph(state, excludePatterns = []) {
+  if (!excludePatterns.length) return state;
+  for (const [path, node] of [...state.nodes]) {
+    if (!isPathExcluded(path, excludePatterns) && !isClusterExcluded(node.dir, excludePatterns)) {
+      continue;
+    }
+    removeAllEdgesForPath(state, path, []);
+    state.nodes.delete(path);
+    state.cluster.delete(path);
+  }
+  for (const [key, e] of [...state.edges]) {
+    if (isPathExcluded(e.from, excludePatterns) || isPathExcluded(e.to, excludePatterns)) {
+      state.edges.delete(key);
+      removeEdgeIndex(state, key, e.from);
+    }
+  }
+  syncClustersSet(state, excludePatterns);
   return state;
 }
 
 /**
  * Rebuild state from scratch up to a given commit index.
  */
-export function rebuildToCommit(commits, targetIdx) {
+export function rebuildToCommit(commits, targetIdx, excludePatterns = []) {
   const state = emptyState();
   if (targetIdx < 0) return state;
   for (let i = 0; i <= targetIdx; i++) {
-    applyCommit(state, commits[i], i);
+    applyCommit(state, commits[i], i, excludePatterns);
   }
   return state;
 }
@@ -258,13 +293,42 @@ export function getNeighborSet(state, path) {
   return set;
 }
 
+/** Visible file paths in a top-level folder cluster at the current commit. */
+export function getClusterFocusSet(state, cluster, commitIndex, excludePatterns = []) {
+  const set = new Set();
+  if (!state || !cluster || isClusterExcluded(cluster, excludePatterns)) return set;
+  for (const [path, node] of state.nodes) {
+    if (node.dir === cluster && isNodeVisible(node, commitIndex)) set.add(path);
+  }
+  return set;
+}
+
+/** Node selection takes precedence over folder focus for graph dimming. */
+export function resolveFocusSet(state, commitIndex, selectedPath, selectedCluster, excludePatterns = []) {
+  if (selectedPath) return getNeighborSet(state, selectedPath);
+  if (selectedCluster) return getClusterFocusSet(state, selectedCluster, commitIndex, excludePatterns);
+  return new Set();
+}
+
+/** How many files import each path (inbound edge count at current state). */
+export function getInboundCounts(state) {
+  const counts = new Map();
+  if (!state) return counts;
+  for (const [, e] of state.edges) {
+    counts.set(e.to, (counts.get(e.to) || 0) + 1);
+  }
+  return counts;
+}
+
 /** All folder clusters that appear anywhere in the commit history (stable universe). */
-export function collectAllClusters(commits) {
+export function collectAllClusters(commits, excludePatterns = []) {
   const set = new Set();
   if (!commits) return set;
   for (const commit of commits) {
     for (const ch of commit.changes || []) {
-      if (ch.path) set.add(topLevelDir(ch.path));
+      if (!ch.path || isPathExcluded(ch.path, excludePatterns)) continue;
+      const dir = topLevelDir(ch.path);
+      if (!isClusterExcluded(dir, excludePatterns)) set.add(dir);
     }
   }
   return set;
@@ -275,10 +339,44 @@ function circularHueDistance(a, b) {
   return Math.min(d, 360 - d);
 }
 
+/** Hand-picked hues (°) that read clearly apart on dark backgrounds. */
+const DISTINCT_HUES = [
+  8, 38, 68, 98, 128, 158, 188, 218, 248, 278, 308, 338,
+];
+
+/**
+ * Spread `n` hues around the wheel with a minimum perceptual gap so neighbors
+ * do not collapse into the same cyan/purple band.
+ */
+function buildDistinctHues(n) {
+  if (n <= 0) return [];
+  if (n <= DISTINCT_HUES.length) return DISTINCT_HUES.slice(0, n);
+
+  const minSep = Math.max(32, (360 / n) * 1.15);
+  const hues = [];
+
+  for (let i = 0; i < n; i++) {
+    let h = (i * 137.508 + 21) % 360;
+    let guard = 0;
+    while (guard < 240) {
+      const rounded = Math.round(h * 10) / 10;
+      const ok = hues.every((u) => circularHueDistance(rounded, u) >= minSep - 0.5);
+      if (ok) {
+        hues.push(rounded);
+        break;
+      }
+      h = (h + minSep) % 360;
+      guard++;
+    }
+    if (hues.length === i) hues.push(Math.round(((i * 137.508) + 21) % 360));
+  }
+
+  return hues;
+}
+
 /**
  * Assign one unique color slot per cluster. Uses the full-repo cluster list so
- * hues stay fixed during timeline playback; slots are evenly spaced on the wheel
- * with a second lightness tier when there are more clusters than perceptual hues.
+ * hues stay fixed during timeline playback.
  */
 export function clusterPalette(state, allClusters = null) {
   const source = allClusters?.size ? allClusters : state.clusters;
@@ -287,30 +385,14 @@ export function clusterPalette(state, allClusters = null) {
   const n = universe.length;
   if (n === 0) return palette;
 
-  const minGap = n <= 1 ? 360 : 360 / n;
-  const used = [];
+  const hues = buildDistinctHues(n);
 
   for (let i = 0; i < n; i++) {
-    const cluster = universe[i];
-    let hue = ((i + 0.5) * 360) / n;
-    const variant = Math.floor(i / 24);
-    if (variant > 0) hue = (hue + variant * 13.7) % 360;
-
-    let guard = 0;
-    while (guard < 720) {
-      const rounded = Math.round(hue * 10) / 10;
-      const tooClose = used.some((u) => circularHueDistance(rounded, u) < Math.min(minGap, 18) - 0.01);
-      if (!tooClose) {
-        used.push(rounded);
-        palette.set(cluster, { hue: rounded, variant });
-        break;
-      }
-      hue = (hue + Math.max(18, minGap)) % 360;
-      guard++;
-    }
-    if (!palette.has(cluster)) {
-      palette.set(cluster, { hue: (i * 137.508) % 360, variant });
-    }
+    palette.set(universe[i], {
+      hue: hues[i],
+      variant: i % 5,
+    });
   }
+
   return palette;
 }

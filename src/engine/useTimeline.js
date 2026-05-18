@@ -18,8 +18,11 @@ const INCREMENTAL_SEEK_MAX = 40;
 
 export function useTimeline(dataset) {
   const commits = dataset?.commits ?? [];
+  const excludePatterns = dataset?.exclude ?? [];
   const commitsRef = useRef(commits);
+  const excludeRef = useRef(excludePatterns);
   commitsRef.current = commits;
+  excludeRef.current = excludePatterns;
 
   const [index, setIndex] = useState(-1);
   const [playing, setPlaying] = useState(false);
@@ -37,7 +40,7 @@ export function useTimeline(dataset) {
     setIndex(-1);
     setPlaying(false);
     bumpState();
-  }, [dataset?.repo, commits.length, bumpState]);
+  }, [dataset?.repo, commits.length, excludePatterns, bumpState]);
 
   const stepForward = useCallback(() => {
     const list = commitsRef.current;
@@ -46,7 +49,7 @@ export function useTimeline(dataset) {
       return false;
     }
     const nextIdx = index + 1;
-    applyCommit(stateRef.current, list[nextIdx], nextIdx);
+    applyCommit(stateRef.current, list[nextIdx], nextIdx, excludeRef.current);
     setIndex(nextIdx);
     bumpState();
     onAdvanceListeners.current.forEach((cb) => cb(nextIdx, stateRef.current));
@@ -56,7 +59,7 @@ export function useTimeline(dataset) {
   const stepBackward = useCallback(() => {
     const list = commitsRef.current;
     if (index < 0) return false;
-    revertCommit(stateRef.current, list[index], index);
+    revertCommit(stateRef.current, list[index], index, excludeRef.current);
     const prev = index - 1;
     stateRef.current.lastCommit = prev >= 0 ? list[prev] : null;
     setIndex(prev);
@@ -93,15 +96,15 @@ export function useTimeline(dataset) {
     if (Math.abs(delta) <= INCREMENTAL_SEEK_MAX) {
       if (delta > 0) {
         for (let i = current + 1; i <= clamped; i++) {
-          applyCommit(stateRef.current, list[i], i);
+          applyCommit(stateRef.current, list[i], i, excludeRef.current);
         }
       } else {
         for (let i = current; i > clamped; i--) {
-          revertCommit(stateRef.current, list[i], i);
+          revertCommit(stateRef.current, list[i], i, excludeRef.current);
         }
       }
     } else {
-      stateRef.current = rebuildToCommit(list, clamped);
+      stateRef.current = rebuildToCommit(list, clamped, excludeRef.current);
     }
 
     stateRef.current.lastCommit = clamped >= 0 ? list[clamped] : null;
