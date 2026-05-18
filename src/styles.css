@@ -1793,14 +1793,40 @@ button:focus-visible {
 
   .control-bar {
     padding: 10px 14px calc(14px + env(safe-area-inset-bottom, 0px));
-    gap: 8px;
+    gap: 6px;
+  }
+
+  /* Playback sits directly under the timeline — not inside the tools shelf */
+  .control-cluster {
+    display: contents;
+  }
+
+  .control-row--playback {
+    order: 2;
+    display: flex !important;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    gap: 10px;
+    margin: 2px 0 4px;
+    border-right: none;
+    padding-right: 0;
+    flex-shrink: 0;
+  }
+
+  .timeline {
+    order: 1;
+    width: 100%;
   }
 
   .control-row--tools {
+    order: 3;
     display: none;
     flex-wrap: wrap;
     gap: 8px;
-    padding-top: 4px;
+    width: 100%;
+    padding-top: 8px;
+    margin-top: 2px;
     border-top: 1px solid var(--hairline);
   }
 
@@ -1808,15 +1834,10 @@ button:focus-visible {
     display: flex;
   }
 
-  .control-row--playback {
-    border-right: none;
-    padding-right: 0;
-  }
-
   .app {
     --mobile-toolbar-bottom: 132px;
-    --mobile-bar-bottom: 118px;
-    --mobile-bar-bottom-expanded: 212px;
+    --mobile-bar-bottom: 128px;
+    --mobile-bar-bottom-expanded: 220px;
   }
 
   .info-stack {
@@ -1907,8 +1928,8 @@ button:focus-visible {
 @media (max-width: 767px) {
   .app {
     --mobile-toolbar-bottom: 126px;
-    --mobile-bar-bottom: 108px;
-    --mobile-bar-bottom-expanded: 198px;
+    --mobile-bar-bottom: 118px;
+    --mobile-bar-bottom-expanded: 206px;
   }
 
   .header-start {
