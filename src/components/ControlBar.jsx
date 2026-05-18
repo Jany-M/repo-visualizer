@@ -65,13 +65,19 @@ export default function ControlBar({
   return (
     <div className="control-bar">
       <Timeline commits={commits} index={index} onSeek={onSeek} />
-      <div className="control-row">
+      <div className="control-row control-row--essential">
         <button className="btn" onClick={onRestart} title="Restart" type="button">
           <span className="icon"><RestartIcon /></span>
         </button>
         <button className="btn btn-play" onClick={onTogglePlay} title={playing ? 'Pause' : 'Play'} type="button">
           {playing ? <PauseIcon /> : <PlayIcon />}
         </button>
+        <div className="commit-counter commit-counter--inline">
+          {index < 0 ? '00' : String(index + 1).padStart(2, '0')}
+          <span className="dim"> / {String(commits.length).padStart(2, '0')}</span>
+        </div>
+      </div>
+      <div className="control-row control-row--extended">
         <div className="speed-control">
           <span>SPEED</span>
           <select value={speed} onChange={(e) => onSetSpeed(e.target.value)}>
@@ -110,7 +116,7 @@ export default function ControlBar({
         </div>
         <StylePicker style={style} onChange={onStyleChange} />
         <div className="spacer" />
-        <div className="commit-counter">
+        <div className="commit-counter commit-counter--extended">
           {index < 0 ? '00' : String(index + 1).padStart(2, '0')}
           <span className="dim"> / {String(commits.length).padStart(2, '0')}</span>
           <span className="dim node-count"> · {visibleCount} nodes</span>
@@ -119,4 +125,3 @@ export default function ControlBar({
     </div>
   );
 }
-

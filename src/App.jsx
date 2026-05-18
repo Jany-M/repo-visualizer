@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDataset } from './engine/useDataset.js';
 import { useTimeline } from './engine/useTimeline.js';
 import { clusterPalette, collectAllClusters } from './engine/graphState.js';
+import { isClusterExcluded } from './engine/excludes.js';
 import { countVisibleNodes } from './engine/visibility.js';
-import { computeBranchLanes, datasetSupportsBranches } from './engine/branchLanes.js';
 import {
   isWebGLAvailable,
   WEBGL_NODE_THRESHOLD,
@@ -14,6 +14,7 @@ import CommitCard from './components/CommitCard.jsx';
 import ControlBar from './components/ControlBar.jsx';
 import Legend from './components/Legend.jsx';
 import NodeInspector from './components/NodeInspector.jsx';
+import { isCompactLayout, useLayoutMode } from './engine/useLayoutMode.js';
 import GalaxyVisualizer from './visualizers/GalaxyVisualizer.jsx';
 import OrganicVisualizer from './visualizers/OrganicVisualizer.jsx';
 import NeuralVisualizer from './visualizers/NeuralVisualizer.jsx';
@@ -53,13 +54,17 @@ export default function App() {
   const [encodeProgress, setEncodeProgress] = useState(0);
   const [encodeFormat, setEncodeFormat] = useState('webm');
   const [selectedPath, setSelectedPath] = useState(null);
+  const [selectedCluster, setSelectedCluster] = useState(null);
   const wasPlayingRef = useRef(false);
-  const [branchView, setBranchView] = useState(false);
   const [autoFit, setAutoFit] = useState(() => loadBool('rv-auto-fit', true));
   const [perfMode, setPerfMode] = useState('auto');
   const [useWebGL, setUseWebGL] = useState(false);
   const [webglFailed, setWebglFailed] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const layoutMode = useLayoutMode();
+  const compactLayout = isCompactLayout(layoutMode);
+  const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
+  const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
 
   const stageRef = useRef(null);
   const timelineRef = useRef(timeline);
@@ -67,12 +72,6 @@ export default function App() {
   const recordStopRef = useRef(false);
   const perfBeforeRecordRef = useRef(null);
   timelineRef.current = timeline;
-
-  const branchSupported = datasetSupportsBranches(dataset);
-  const branchLanes = useMemo(
-    () => computeBranchLanes(timeline.commits, timeline.index, branchView && branchSupported),
-    [timeline.commits, timeline.index, branchView, branchSupported],
-  );
 
   const visibleCount = useMemo(
     () => countVisibleNodes(timeline.state, timeline.index),
@@ -93,35 +92,56 @@ export default function App() {
     setUseWebGL(want && isWebGLAvailable() && !webglFailed);
   }, [visibleCount, perfMode, webglFailed, useWebGL]);
 
+  const excludePatterns = useMemo(() => dataset?.exclude ?? [], [dataset?.exclude]);
+
   const currentCommit = timeline.index >= 0 ? timeline.commits[timeline.index] : null;
   const allClusters = useMemo(
-    () => collectAllClusters(timeline.commits),
-    [timeline.commits],
+    () => collectAllClusters(timeline.commits, excludePatterns),
+    [timeline.commits, excludePatterns],
   );
   const palette = useMemo(
     () => clusterPalette(timeline.state, allClusters),
     [timeline.state, allClusters],
   );
 
-  const handleCloseInspector = useCallback(() => {
-    setSelectedPath(null);
+  const pauseForFocus = useCallback(() => {
+    if (timeline.playing) {
+      wasPlayingRef.current = true;
+      timeline.pause();
+    }
+  }, [timeline]);
+
+  const resumeAfterFocus = useCallback(() => {
     if (wasPlayingRef.current) {
       wasPlayingRef.current = false;
       timeline.play();
     }
   }, [timeline]);
 
+  const handleCloseInspector = useCallback(() => {
+    setSelectedPath(null);
+    resumeAfterFocus();
+  }, [resumeAfterFocus]);
+
+  const handleClusterSelect = useCallback((cluster) => {
+    if (cluster) {
+      pauseForFocus();
+      setSelectedCluster(cluster);
+    } else {
+      setSelectedCluster(null);
+      if (!selectedPath) resumeAfterFocus();
+    }
+  }, [pauseForFocus, resumeAfterFocus, selectedPath]);
+
   const handleNodeClick = useCallback((path) => {
     if (path) {
-      if (timeline.playing) {
-        wasPlayingRef.current = true;
-        timeline.pause();
-      }
+      pauseForFocus();
       setSelectedPath(path);
     } else {
+      setSelectedCluster(null);
       handleCloseInspector();
     }
-  }, [timeline, handleCloseInspector]);
+  }, [pauseForFocus, handleCloseInspector]);
 
   const CanvasVisualizer = CANVAS_VISUALIZERS[style];
   const showWebGL = useWebGL && style === 'galaxy';
@@ -132,14 +152,34 @@ export default function App() {
     palette,
     autoFit,
     selectedPath,
+    selectedCluster,
+    excludePatterns,
     onNodeClick: handleNodeClick,
-    branchLanes,
     cameraApiRef,
   };
 
   useEffect(() => {
+    if (selectedCluster && isClusterExcluded(selectedCluster, excludePatterns)) {
+      setSelectedCluster(null);
+    }
+  }, [selectedCluster, excludePatterns]);
+
+  useEffect(() => {
     localStorage.setItem('rv-auto-fit', String(autoFit));
   }, [autoFit]);
+
+  useEffect(() => {
+    if (compactLayout) {
+      setMobileControlsOpen(false);
+      setMobileInfoOpen(false);
+    }
+  }, [compactLayout]);
+
+  useEffect(() => {
+    if (compactLayout && selectedPath) {
+      setMobileInfoOpen(false);
+    }
+  }, [compactLayout, selectedPath]);
 
   const updateRecordingProgress = useCallback(() => {
     const total = timelineRef.current.commits.length;
@@ -243,8 +283,11 @@ export default function App() {
         if (recording) handleStopRecord();
         else if (encoding) { /* wait for encode to finish */ }
         else if (exportOpen) setExportOpen(false);
-        else handleCloseInspector();
-      } else if (ev.code === 'Space' && !selectedPath && !recording) {
+        else {
+          setSelectedCluster(null);
+          handleCloseInspector();
+        }
+      } else if (ev.code === 'Space' && !selectedPath && !selectedCluster && !recording) {
         ev.preventDefault();
         timeline.toggle();
       } else if (ev.code === 'ArrowRight') timeline.seek(timeline.index + 1);
@@ -256,7 +299,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [timeline, selectedPath, handleCloseInspector, recording, exportOpen, handleStopRecord]);
+  }, [timeline, selectedPath, selectedCluster, handleCloseInspector, recording, exportOpen, handleStopRecord]);
 
   if (loading || !dataset) {
     return (
@@ -267,8 +310,17 @@ export default function App() {
     );
   }
 
+  const controlsExpanded = !compactLayout || mobileControlsOpen;
+  const infoExpanded = !compactLayout || mobileInfoOpen;
+
   return (
-    <div className="app" data-style={style}>
+    <div
+      className="app"
+      data-style={style}
+      data-layout={layoutMode}
+      data-controls-open={controlsExpanded ? 'true' : 'false'}
+      data-info-open={infoExpanded ? 'true' : 'false'}
+    >
       <div className="stage" ref={stageRef}>
         {showWebGL ? (
           <WebGLVisualizer
@@ -304,12 +356,36 @@ export default function App() {
         onStopRecord={handleStopRecord}
         onPauseRecord={handlePauseRecord}
         useWebGL={showWebGL}
-        branchView={branchView}
-        onBranchViewChange={setBranchView}
-        branchSupported={branchSupported}
+        layout={layoutMode}
+        mobileControlsOpen={mobileControlsOpen}
+        mobileInfoOpen={mobileInfoOpen}
+        onToggleMobileControls={() => {
+          setMobileControlsOpen((open) => {
+            const next = !open;
+            if (next && compactLayout) setMobileInfoOpen(false);
+            return next;
+          });
+        }}
+        onToggleMobileInfo={() => {
+          setMobileInfoOpen((open) => {
+            const next = !open;
+            if (next && compactLayout) setMobileControlsOpen(false);
+            return next;
+          });
+        }}
       />
-      <CommitCard commit={currentCommit} />
-      <Legend state={timeline.state} palette={palette} style={style} commitIndex={timeline.index} />
+      <div className="info-stack">
+        <CommitCard commit={currentCommit} />
+        <Legend
+          state={timeline.state}
+          palette={palette}
+          style={style}
+          commitIndex={timeline.index}
+          excludePatterns={excludePatterns}
+          selectedCluster={selectedCluster}
+          onClusterSelect={handleClusterSelect}
+        />
+      </div>
 
       {selectedPath && (
         <NodeInspector

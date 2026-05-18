@@ -106,6 +106,7 @@ export default function NodeInspector({
           ×
         </button>
       </div>
+      <div className="node-inspector-scroll">
       {graphNode && (
         <div className="node-inspector-meta">
           <span>{graphNode.dir}</span>
@@ -156,6 +157,7 @@ export default function NodeInspector({
           })}
         </ul>
       </section>
+      </div>
     </aside>
   );
 }

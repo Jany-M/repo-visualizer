@@ -1,5 +1,6 @@
 import React from 'react';
 import ExportPanel from './ExportPanel.jsx';
+import MobileChrome from './MobileChrome.jsx';
 
 const GITHUB_URL = 'https://github.com/Jany-M/repo-visualizer';
 const AUTHOR_URL = 'https://www.shambix.com/';
@@ -39,9 +40,11 @@ export default function Header({
   onStopRecord,
   onPauseRecord,
   useWebGL,
-  branchView = false,
-  onBranchViewChange,
-  branchSupported = false,
+  layout = 'desktop',
+  mobileControlsOpen = false,
+  mobileInfoOpen = false,
+  onToggleMobileControls,
+  onToggleMobileInfo,
 }) {
   if (!dataset) return null;
   const ts = currentCommit ? new Date(currentCommit.date) : null;
@@ -51,126 +54,131 @@ export default function Header({
 
   return (
     <header className="header">
-      <div className="brand">
-        <div className="brand-title-row">
-          <div className="brand-mark"><span className="dot" />Repo Visualizer</div>
-          <a
-            className="brand-github"
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="View source on GitHub"
-            aria-label="GitHub repository"
-          >
-            <GitHubIcon />
-          </a>
+      <div className="header-start">
+        <div className="brand">
+          <div className="brand-title-row">
+            <div className="brand-mark"><span className="dot" />Repo Visualizer</div>
+            <a
+              className="brand-github"
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="View source on GitHub"
+              aria-label="GitHub repository"
+            >
+              <GitHubIcon />
+            </a>
+          </div>
+          <div className="brand-sub">
+            A cinematic timeline of your codebase
+            <span className="brand-sep"> · by </span>
+            <a className="brand-author" href={AUTHOR_URL} target="_blank" rel="noopener noreferrer">
+              Jany Martelli
+            </a>
+          </div>
         </div>
-        <div className="brand-sub">
-          A cinematic timeline of your codebase
-          <span className="brand-sep"> · by </span>
-          <a className="brand-author" href={AUTHOR_URL} target="_blank" rel="noopener noreferrer">
-            Jany Martelli
-          </a>
+        <div className="header-repo-mobile">
+          <div className="repo-name">{dataset.repo}</div>
         </div>
       </div>
-      <div className="repo-meta">
-        <div className="repo-name-row">
-          <div className="repo-name">{dataset.repo}</div>
-          {branchSupported && onBranchViewChange && (
-            <button
-              type="button"
-              role="switch"
-              aria-checked={branchView}
-              className={`header-branch-toggle${branchView ? ' is-on' : ''}`}
-              onClick={() => onBranchViewChange(!branchView)}
-              title="Spread merge commits across vertical lanes"
-            >
-              <span className="header-branch-toggle-label">Branches</span>
-              <span className="header-branch-toggle-track" aria-hidden="true">
-                <span className="header-branch-toggle-thumb" />
-              </span>
-            </button>
+
+      <div className="header-right">
+        <div className="repo-meta">
+          <div className="repo-name-row">
+            <div className="repo-name">{dataset.repo}</div>
+          </div>
+          <div className="repo-meta-detail">
+            {dataset.totalCommits} commits
+            {source === 'demo' && ' · demo dataset'}
+          </div>
+          {ts && (
+            <div className="repo-meta-detail">
+              {ts.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+            </div>
           )}
         </div>
-        <div>
-          {dataset.totalCommits} commits
-          {source === 'demo' && ' · demo dataset'}
-        </div>
-        {ts && (
-          <div>
-            {ts.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-          </div>
-        )}
-        <div className="header-export-wrap">
-          <div className="header-export-toolbar">
-            {encoding ? (
-              <div className="header-export-encoding" aria-live="polite">
-                <span className="header-export-encoding-label">
-                  Creating {encodeLabel}… {encPct}%
-                </span>
-                <div
-                  className="header-export-encoding-bar"
-                  role="progressbar"
-                  aria-valuenow={encPct}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                >
+
+        <div className="header-toolbar">
+          <div className="header-export-wrap">
+            <div className="header-export-toolbar">
+              {encoding ? (
+                <div className="header-export-encoding" aria-live="polite">
+                  <span className="header-export-encoding-label">
+                    Creating {encodeLabel}… {encPct}%
+                  </span>
                   <div
-                    className="header-export-encoding-bar-fill"
-                    style={{ width: `${encPct}%` }}
-                  />
+                    className="header-export-encoding-bar"
+                    role="progressbar"
+                    aria-valuenow={encPct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    <div
+                      className="header-export-encoding-bar-fill"
+                      style={{ width: `${encPct}%` }}
+                    />
+                  </div>
                 </div>
-              </div>
-            ) : recording ? (
-              <>
-                <button
-                  type="button"
-                  className="btn export-btn header-export-btn is-recording"
-                  disabled
-                  aria-live="polite"
-                >
-                  <span className="rec-pulse" aria-hidden />
-                  Recording {recPct}%
-                </button>
-                <button
-                  type="button"
-                  className="btn header-export-btn"
-                  onClick={onPauseRecord}
-                  title={recordingPlaying ? 'Pause timeline' : 'Resume timeline'}
-                >
-                  {recordingPlaying ? 'Pause' : 'Resume'}
-                </button>
-                <button
-                  type="button"
-                  className="btn header-export-btn btn-danger"
-                  onClick={onStopRecord}
-                  title="Stop and download"
-                >
-                  Stop
-                </button>
-              </>
-            ) : (
-              onToggleExport && (
-                <button
-                  type="button"
-                  className={`btn export-btn header-export-btn${exportOpen ? ' is-active' : ''}`}
-                  onClick={onToggleExport}
-                  title="Export timeline as video or GIF"
-                >
-                  <span className="icon"><ExportIcon /></span>
-                  Export
-                </button>
-              )
+              ) : recording ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn export-btn header-export-btn is-recording"
+                    disabled
+                    aria-live="polite"
+                  >
+                    <span className="rec-pulse" aria-hidden />
+                    <span className="header-export-label">Recording {recPct}%</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn header-export-btn"
+                    onClick={onPauseRecord}
+                    title={recordingPlaying ? 'Pause timeline' : 'Resume timeline'}
+                  >
+                    {recordingPlaying ? 'Pause' : 'Resume'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn header-export-btn btn-danger"
+                    onClick={onStopRecord}
+                    title="Stop and download"
+                  >
+                    Stop
+                  </button>
+                </>
+              ) : (
+                onToggleExport && (
+                  <button
+                    type="button"
+                    className={`btn export-btn header-export-btn${exportOpen ? ' is-active' : ''}`}
+                    onClick={onToggleExport}
+                    title="Export timeline as video or GIF"
+                    aria-label="Export timeline"
+                  >
+                    <span className="icon"><ExportIcon /></span>
+                    <span className="header-export-label">Export</span>
+                  </button>
+                )
+              )}
+            </div>
+            {!recording && !encoding && (
+              <ExportPanel
+                open={exportOpen}
+                onClose={onCloseExport}
+                onStartRecord={onStartRecord}
+                useWebGL={useWebGL}
+              />
             )}
           </div>
-          {!recording && !encoding && (
-            <ExportPanel
-              open={exportOpen}
-              onClose={onCloseExport}
-              onStartRecord={onStartRecord}
-              useWebGL={useWebGL}
-            />
-          )}
+
+          <MobileChrome
+            layout={layout}
+            controlsOpen={mobileControlsOpen}
+            infoOpen={mobileInfoOpen}
+            onToggleControls={onToggleMobileControls}
+            onToggleInfo={onToggleMobileInfo}
+          />
         </div>
       </div>
     </header>
