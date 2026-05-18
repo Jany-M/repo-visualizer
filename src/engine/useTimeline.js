@@ -18,6 +18,9 @@ const SPEEDS = {
 
 const INCREMENTAL_SEEK_MAX = 40;
 
+/** Stable fallback so effect deps do not change every render while dataset is loading. */
+const EMPTY_LIST = Object.freeze([]);
+
 function yieldToMain() {
   return new Promise((resolve) => {
     if (typeof requestIdleCallback !== 'undefined') {
@@ -29,8 +32,8 @@ function yieldToMain() {
 }
 
 export function useTimeline(dataset) {
-  const commits = dataset?.commits ?? [];
-  const excludePatterns = dataset?.exclude ?? [];
+  const commits = dataset?.commits ?? EMPTY_LIST;
+  const excludePatterns = dataset?.exclude ?? EMPTY_LIST;
   const commitsRef = useRef(commits);
   const excludeRef = useRef(excludePatterns);
   commitsRef.current = commits;
@@ -62,7 +65,7 @@ export function useTimeline(dataset) {
     setBuildingFinal(false);
     setBuildProgress(0);
     bumpState();
-  }, [dataset?.repo, commits.length, excludePatterns, bumpState, cancelBuild]);
+  }, [dataset?.repo, commits.length, dataset?.exclude, bumpState, cancelBuild]);
 
   const stepForward = useCallback(() => {
     const list = commitsRef.current;
