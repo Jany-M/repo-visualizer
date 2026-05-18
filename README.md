@@ -26,7 +26,7 @@ A commit advances the timeline and triggers a ripple from every touched file.
 - **Legend focus** — click a cluster in the legend to highlight that folder and dim everything else; click again or press `Esc` to clear
 - **Render quality** — **Auto-Res** switches to fast GPU rendering only when the graph is very large; **Hi-Res** / **Low-Res** force canvas or WebGL
 - **Large repos** — WebGL point renderer for Galaxy at high node counts, with automatic canvas fallback if WebGL is unavailable
-- **Mobile layout** — playback controls (restart, play, final state) stay visible under the timeline; speed, themes, zoom, and other options live in the expandable **Controls** panel; **Info** opens the commit card and cluster legend
+- **Mobile layout** — speed, themes, zoom, and other options live in the expandable **Controls** panel; **Info** opens the commit card and cluster legend
 
 Four visual themes are included, all switchable live:
 
@@ -96,7 +96,7 @@ The analyzer parses **imports** on changed files and resolves them to other path
 | PHP | `.php` | `use`, `require`/`include`, `__DIR__` joins, dotted namespace paths |
 | CSS / SCSS / Sass / Less | `.css` `.scss` `.sass` `.less` | `@import` |
 
-Any other file type appears as a **node** (sized by churn) but does not add import **edges**. Re-run `npm run analyze` after upgrading the analyzer so `history.json` picks up improved resolution.
+Any other file type appears as a **node** (sized by churn) but does not add import **edges**. 
 
 ### Auto-excluded paths (every repo)
 
