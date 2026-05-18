@@ -256,6 +256,53 @@ export function rebuildToCommit(commits, targetIdx, excludePatterns = []) {
   return state;
 }
 
+/** Chunk size for async rebuild — smaller chunks on very long histories. */
+export function pickRebuildChunkSize(commitCount) {
+  if (commitCount <= 80) return commitCount;
+  if (commitCount <= 300) return 24;
+  if (commitCount <= 1200) return 40;
+  return 64;
+}
+
+/**
+ * Rebuild graph state in chunks, yielding to the main thread between batches.
+ * Builds into a fresh state object so the UI can show progress without layout thrash.
+ */
+export async function rebuildToCommitAsync(
+  commits,
+  targetIdx,
+  excludePatterns = [],
+  {
+    onProgress,
+    shouldCancel,
+    chunkSize = pickRebuildChunkSize(targetIdx + 1),
+    yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0)),
+  } = {},
+) {
+  const state = emptyState();
+  if (targetIdx < 0) {
+    onProgress?.(1);
+    return state;
+  }
+
+  const total = targetIdx + 1;
+  let done = 0;
+
+  while (done <= targetIdx) {
+    if (shouldCancel?.()) return null;
+
+    const end = Math.min(targetIdx, done + chunkSize - 1);
+    for (let i = done; i <= end; i++) {
+      applyCommit(state, commits[i], i, excludePatterns);
+    }
+    done = end + 1;
+    onProgress?.(done / total);
+    if (done <= targetIdx) await yieldToMain();
+  }
+
+  return state;
+}
+
 /**
  * Commits that touched a given file path (for inspector).
  */

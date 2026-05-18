@@ -40,10 +40,27 @@ export function filterVisibleLinks(links, commitIndex) {
   return out;
 }
 
+function nodeAge(node, commitIndex) {
+  if (commitIndex < 0) return Infinity;
+  const born = typeof node.bornAt === 'number' ? node.bornAt : 0;
+  return commitIndex - born;
+}
+
 /** Fade-in for nodes born within the last few commits */
 export function nodeOpacity(node, commitIndex, fadeWindow = 4) {
   if (commitIndex < 0) return 0;
-  const age = commitIndex - node.bornAt;
+  const age = nodeAge(node, commitIndex);
   if (age >= fadeWindow) return 1;
   return 0.35 + (age / fadeWindow) * 0.65;
+}
+
+/**
+ * Transient birth bloom for large halos (1 = newborn, 0 = settled).
+ * Separate from nodeOpacity so cores can reach full brightness while halos shrink.
+ */
+export function nodeBirthGlow(node, commitIndex, settleWindow = 10) {
+  if (commitIndex < 0) return 0;
+  const age = nodeAge(node, commitIndex);
+  if (age >= settleWindow) return 0;
+  return 1 - age / settleWindow;
 }
