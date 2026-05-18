@@ -7,6 +7,8 @@ public/data/*.json
 !public/data/demo.json
 *.log
 /.cursor
+.playwright-mcp/
 repovisualizer.config.json
 repo-visualizer.mp4
 repo-visualizer.png
+/test-results
