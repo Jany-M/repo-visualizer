@@ -2,7 +2,8 @@ import React, { useRef } from 'react';
 import { useVisualizerCore } from './useVisualizerCore.js';
 import { clusterColorFor } from '../engine/colors.js';
 import {
-  applyNodeAlpha, drawClusterLabels, drawHighlightLinks, drawSelectionRing, linkAlpha,
+  applyNodeAlpha, drawClusterLabels, drawHighlightLinks, drawInspectNodeLabels,
+  drawSelectionRing, linkAlpha,
   nodeDrawRadius, safeRadius, shouldDrawRipple, shouldGlow,
 } from './drawHelpers.js';
 
@@ -14,12 +15,12 @@ import {
  * High-contrast, tech-forward, dashboard-grade aesthetic.
  */
 export default function NeuralVisualizer({
-  state, commitIndex, palette, autoFit, selectedPath, onNodeClick, branchLanes, cameraApiRef,
+  state, commitIndex, palette, autoFit, selectedPath, onNodeClick, cameraApiRef,
 }) {
   const hostRef = useRef(null);
 
   useVisualizerCore({
-    hostRef, state, commitIndex, autoFit, selectedPath, onNodeClick, branchLanes, cameraApiRef,
+    hostRef, state, commitIndex, autoFit, selectedPath, onNodeClick, cameraApiRef,
     clearStrategy: 'full',
     background: '#04060c',
     draw: (ctx, frame) => drawNeural(ctx, frame, { palette }),
@@ -175,6 +176,7 @@ function drawNeural(ctx, frame, { palette }) {
   ctx.fillRect(0, scanY - 40, w, 80);
 
   drawClusterLabels(ctx, frame, palette, 'neural', clusterColorFor);
+  drawInspectNodeLabels(ctx, frame, palette, 'neural', clusterColorFor);
 
   ctx.globalCompositeOperation = 'source-over';
 }

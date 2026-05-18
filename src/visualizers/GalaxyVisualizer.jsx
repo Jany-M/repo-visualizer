@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { useVisualizerCore } from './useVisualizerCore.js';
 import { clusterColorFor } from '../engine/colors.js';
 import {
-  applyNodeAlpha, drawClusterLabels, drawHighlightLinks, drawSelectionRing, linkAlpha,
+  applyNodeAlpha, drawClusterLabels, drawHighlightLinks, drawInspectNodeLabels,
+  drawSelectionRing, linkAlpha,
   nodeDrawRadius, safeRadius, shouldDrawRipple, shouldGlow,
 } from './drawHelpers.js';
 
@@ -20,7 +21,6 @@ export default function GalaxyVisualizer({
   autoFit,
   selectedPath,
   onNodeClick,
-  branchLanes,
   cameraApiRef,
 }) {
   const hostRef = useRef(null);
@@ -63,7 +63,6 @@ export default function GalaxyVisualizer({
     autoFit,
     selectedPath,
     onNodeClick,
-    branchLanes,
     cameraApiRef,
     draw: (ctx, frame) => drawGalaxy(ctx, frame, { stars, nebulae, palette }),
   });
@@ -228,4 +227,5 @@ function drawGalaxy(ctx, frame, { stars, nebulae, palette }) {
 
   ctx.globalCompositeOperation = 'source-over';
   drawClusterLabels(ctx, frame, palette, 'galaxy', clusterColorFor);
+  drawInspectNodeLabels(ctx, frame, palette, 'galaxy', clusterColorFor);
 }

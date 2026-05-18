@@ -1,5 +1,7 @@
 /** Shared draw helpers for canvas visualizers */
 
+import { isClusterExcluded } from '../engine/excludes.js';
+
 /** Canvas arc/gradient radii must be non-negative finite numbers. */
 export function safeRadius(value, min = 0.5) {
   const r = Number(value);
@@ -7,29 +9,32 @@ export function safeRadius(value, min = 0.5) {
   return r;
 }
 
+function inFocus(frame, path) {
+  return frame.focusSet?.has(path) ?? false;
+}
+
 export function shouldGlow(n, frame) {
-  if (!frame.dimOthers || !frame.selectedPath) return true;
-  return frame.neighborSet?.has(n.path) ?? false;
+  if (!frame.dimOthers) return true;
+  return inFocus(frame, n.path);
 }
 
 export function shouldDrawRipple(path, frame) {
-  if (!frame.dimOthers || !frame.selectedPath) return true;
-  return frame.neighborSet?.has(path) ?? false;
+  if (!frame.dimOthers) return true;
+  return inFocus(frame, path);
 }
 
 export function linkAlpha(frame, pathA, pathB) {
-  if (!frame.dimOthers || !frame.selectedPath) return 1;
-  const { neighborSet } = frame;
-  if (neighborSet.has(pathA) && neighborSet.has(pathB)) return 1;
+  if (!frame.dimOthers) return 1;
+  if (inFocus(frame, pathA) && inFocus(frame, pathB)) return 1;
   return 0.07;
 }
 
 export function applyNodeAlpha(ctx, n, frame) {
-  const { selectedPath, neighborSet, dimOthers, nodeOpacity } = frame;
+  const { selectedPath, dimOthers, nodeOpacity } = frame;
   let alpha = nodeOpacity ? nodeOpacity(n) : 1;
-  if (dimOthers && selectedPath) {
-    if (n.path === selectedPath) alpha = 1;
-    else if (neighborSet.has(n.path)) alpha = Math.max(alpha, 0.9);
+  if (dimOthers) {
+    if (selectedPath && n.path === selectedPath) alpha = 1;
+    else if (inFocus(frame, n.path)) alpha = Math.max(alpha, selectedPath ? 0.9 : 0.95);
     else alpha = 0.08;
   }
   ctx.globalAlpha = alpha;
@@ -37,14 +42,82 @@ export function applyNodeAlpha(ctx, n, frame) {
 }
 
 export function neighborBoostRadius(n, frame) {
-  if (!frame.dimOthers || !frame.selectedPath) return 1;
-  if (n.path === frame.selectedPath) return 1.35;
-  if (frame.neighborSet?.has(n.path)) return 1.2;
+  if (!frame.dimOthers) return 1;
+  if (frame.selectedPath && n.path === frame.selectedPath) return 1.35;
+  if (inFocus(frame, n.path)) return frame.selectedPath ? 1.2 : 1.08;
   return 1;
 }
 
 export function nodeDrawRadius(n, frame) {
   return safeRadius((n.r ?? 6) * neighborBoostRadius(n, frame), 0.5);
+}
+
+function fileBaseName(filePath) {
+  const parts = filePath.split('/');
+  return parts[parts.length - 1] || filePath;
+}
+
+/**
+ * File name labels beside highlighted nodes while the node inspector is open.
+ */
+export function drawInspectNodeLabels(ctx, frame, palette, style, clusterColorForFn) {
+  const { selectedPath, focusSet, dimOthers, nodes, w, h } = frame;
+  if (!selectedPath || !dimOthers || !focusSet?.size || !nodes?.length) return;
+
+  const fontSize = style === 'minimal' ? 10 : 11;
+  const canvasCx = w / 2;
+  const canvasCy = h / 2;
+  const pad = style === 'minimal' ? 5 : 6;
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.font = `600 ${fontSize}px "JetBrains Mono", "SF Mono", ui-monospace, monospace`;
+  ctx.textBaseline = 'middle';
+
+  for (const n of nodes) {
+    if (!focusSet.has(n.path)) continue;
+
+    const name = fileBaseName(n.path);
+    const r = nodeDrawRadius(n, frame);
+    const c = clusterColorForFn(palette, n.dir, style);
+    const isSelected = n.path === selectedPath;
+
+    let dx = n.x - canvasCx;
+    let dy = n.y - canvasCy;
+    const dist = Math.hypot(dx, dy) || 1;
+    dx /= dist;
+    dy /= dist;
+
+    const labelX = n.x + dx * (r + pad + 2);
+    const labelY = n.y + dy * (r + pad + 2);
+    const align = dx > 0.25 ? 'left' : dx < -0.25 ? 'right' : 'center';
+    const textX = align === 'left' ? labelX + 4 : align === 'right' ? labelX - 4 : labelX;
+
+    ctx.textAlign = align;
+    const tw = ctx.measureText(name).width;
+    const boxPadX = 5;
+    const boxPadY = 3;
+    const boxW = tw + boxPadX * 2;
+    const boxH = fontSize + boxPadY * 2;
+    let boxX = textX - (align === 'center' ? boxW / 2 : align === 'right' ? boxW : 0);
+    const boxY = labelY - boxH / 2;
+
+    ctx.globalAlpha = 1;
+    if (style === 'minimal') {
+      ctx.fillStyle = isSelected ? 'rgba(247, 245, 240, 0.96)' : 'rgba(247, 245, 240, 0.88)';
+    } else {
+      ctx.fillStyle = isSelected ? 'rgba(8, 10, 22, 0.88)' : 'rgba(8, 10, 22, 0.78)';
+    }
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+
+    ctx.globalAlpha = isSelected ? 1 : 0.95;
+    ctx.fillStyle = isSelected
+      ? (style === 'minimal' ? '#0f1116' : '#ffffff')
+      : c.core;
+    ctx.fillText(name, textX, labelY);
+  }
+
+  ctx.restore();
 }
 
 /** Bright import edges for the inspected node (drawn on top). */
@@ -121,6 +194,9 @@ export function drawClusterLabels(ctx, frame, palette, style, clusterColorForFn)
   ctx.textBaseline = 'middle';
 
   for (const [dir, clusterNodes] of byDir) {
+    if (frame.excludePatterns?.length && isClusterExcluded(dir, frame.excludePatterns)) continue;
+    if (!clusterNodes.length) continue;
+
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;
@@ -160,9 +236,9 @@ export function drawClusterLabels(ctx, frame, palette, style, clusterColorForFn)
     const labelY = cy + dy * extent;
 
     const c = clusterColorForFn(palette, dir, style);
-    const hasHighlight = frame.dimOthers && frame.selectedPath;
+    const hasHighlight = frame.dimOthers;
     const clusterTouched = hasHighlight
-      && clusterNodes.some((n) => frame.neighborSet?.has(n.path));
+      && clusterNodes.some((n) => inFocus(frame, n.path));
     ctx.globalAlpha = hasHighlight && !clusterTouched ? 0.22 : 0.95;
     ctx.fillStyle = c.core;
     ctx.fillText(dir, labelX, labelY);

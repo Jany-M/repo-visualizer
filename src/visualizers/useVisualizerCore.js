@@ -16,7 +16,7 @@ import {
   snapCamera,
 } from '../engine/camera.js';
 import { isNodeVisible, nodeOpacity } from '../engine/visibility.js';
-import { getDepsForPath, getNeighborSet } from '../engine/graphState.js';
+import { getDepsForPath, resolveFocusSet } from '../engine/graphState.js';
 
 export function useVisualizerCore({
   hostRef,
@@ -29,8 +29,9 @@ export function useVisualizerCore({
   onBeforeDraw,
   autoFit = true,
   selectedPath = null,
+  selectedCluster = null,
+  excludePatterns = [],
   onNodeClick,
-  branchLanes = null,
   cameraApiRef,
 }) {
   const canvasRef = useRef(null);
@@ -42,11 +43,11 @@ export function useVisualizerCore({
   const dragRef = useRef(null);
   const paramsRef = useRef({
     draw, onBeforeDraw, clearStrategy, trailAlpha, background,
-    autoFit, selectedPath, onNodeClick, commitIndex, branchLanes,
+    autoFit, selectedPath, selectedCluster, excludePatterns, onNodeClick, commitIndex,
   });
   paramsRef.current = {
     draw, onBeforeDraw, clearStrategy, trailAlpha, background,
-    autoFit, selectedPath, onNodeClick, commitIndex, branchLanes,
+    autoFit, selectedPath, selectedCluster, excludePatterns, onNodeClick, commitIndex,
   };
   stateRef.current = state;
 
@@ -226,9 +227,13 @@ export function useVisualizerCore({
         (l) => nodeSet.has(l.source.path) && nodeSet.has(l.target.path),
       );
 
-      const neighborSet = p.selectedPath
-        ? getNeighborSet(stateRef.current, p.selectedPath)
-        : new Set();
+      const focusSet = resolveFocusSet(
+        stateRef.current,
+        idx,
+        p.selectedPath,
+        p.selectedCluster,
+        p.excludePatterns,
+      );
 
       const pathToNode = new Map(nodes.map((n) => [n.path, n]));
       const highlightLinks = [];
@@ -251,9 +256,10 @@ export function useVisualizerCore({
         state: stateRef.current,
         commitIndex: idx,
         selectedPath: p.selectedPath,
-        neighborSet,
+        focusSet,
         nodeOpacity: (n) => nodeOpacity(n, idx),
-        dimOthers: !!p.selectedPath,
+        dimOthers: focusSet.size > 0,
+        excludePatterns: p.excludePatterns,
       });
 
       ctx.restore();
@@ -276,14 +282,14 @@ export function useVisualizerCore({
   useEffect(() => {
     if (!layoutRef.current || !state) return;
     layoutRef.current.sync(state, commitIndex, {
-      branchLanes,
       forceRestart: commitIndex === 0,
+      excludePatterns,
     });
-  }, [state, commitIndex, branchLanes]);
+  }, [state, commitIndex, excludePatterns]);
 
   useEffect(() => {
     if (commitIndex === lastCommitIdxRef.current) return;
-    if (paramsRef.current.selectedPath) return;
+    if (paramsRef.current.selectedPath || paramsRef.current.selectedCluster) return;
     if (commitIndex >= 0 && state?.lastCommit && commitIndex > lastCommitIdxRef.current) {
       const now = performance.now();
       for (const ch of state.lastCommit.changes) {

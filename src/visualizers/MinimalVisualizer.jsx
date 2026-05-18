@@ -2,7 +2,8 @@ import React, { useRef } from 'react';
 import { useVisualizerCore } from './useVisualizerCore.js';
 import { clusterColorFor } from '../engine/colors.js';
 import {
-  applyNodeAlpha, drawClusterLabels, drawHighlightLinks, drawSelectionRing, linkAlpha,
+  applyNodeAlpha, drawClusterLabels, drawHighlightLinks, drawInspectNodeLabels,
+  drawSelectionRing, linkAlpha,
   nodeDrawRadius, safeRadius, shouldDrawRipple, shouldGlow,
 } from './drawHelpers.js';
 
@@ -14,12 +15,12 @@ import {
  * Upshot piece — quiet, considered, information-dense.
  */
 export default function MinimalVisualizer({
-  state, commitIndex, palette, autoFit, selectedPath, onNodeClick, branchLanes, cameraApiRef,
+  state, commitIndex, palette, autoFit, selectedPath, onNodeClick, cameraApiRef,
 }) {
   const hostRef = useRef(null);
 
   useVisualizerCore({
-    hostRef, state, commitIndex, autoFit, selectedPath, onNodeClick, branchLanes, cameraApiRef,
+    hostRef, state, commitIndex, autoFit, selectedPath, onNodeClick, cameraApiRef,
     clearStrategy: 'full',
     background: '#f7f5f0',
     draw: (ctx, frame) => drawMinimal(ctx, frame, { palette }),
@@ -118,6 +119,7 @@ function drawMinimal(ctx, frame, { palette }) {
   }
 
   drawClusterLabels(ctx, frame, palette, 'minimal', clusterColorFor);
+  drawInspectNodeLabels(ctx, frame, palette, 'minimal', clusterColorFor);
 
   ctx.globalCompositeOperation = 'source-over';
 }

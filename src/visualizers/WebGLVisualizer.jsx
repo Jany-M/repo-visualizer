@@ -8,10 +8,10 @@ import {
   applyCameraTransform,
   createCamera, zoomAt, panBy, fitBounds, lerpCamera, snapCamera, screenToWorld,
 } from '../engine/camera.js';
-import { getNeighborSet } from '../engine/graphState.js';
+import { resolveFocusSet } from '../engine/graphState.js';
 import { isNodeVisible } from '../engine/visibility.js';
 import { clusterColor, clusterColorFor, paletteEntry } from '../engine/colors.js';
-import { drawClusterLabels } from './drawHelpers.js';
+import { drawClusterLabels, drawInspectNodeLabels } from './drawHelpers.js';
 
 const VS = `#version 300 es
 in vec2 a_pos;
@@ -64,16 +64,17 @@ export default function WebGLVisualizer({
   palette,
   autoFit = true,
   selectedPath = null,
+  selectedCluster = null,
+  excludePatterns = [],
   onNodeClick,
-  branchLanes = null,
   onInitFailed,
 }) {
   const hostRef = useRef(null);
   const propsRef = useRef({
-    state, commitIndex, palette, autoFit, selectedPath, onNodeClick, branchLanes,
+    state, commitIndex, palette, autoFit, selectedPath, selectedCluster, excludePatterns, onNodeClick,
   });
   propsRef.current = {
-    state, commitIndex, palette, autoFit, selectedPath, onNodeClick, branchLanes,
+    state, commitIndex, palette, autoFit, selectedPath, selectedCluster, excludePatterns, onNodeClick,
   };
 
   useEffect(() => {
@@ -208,7 +209,7 @@ export default function WebGLVisualizer({
       const h = host.clientHeight;
       const p = propsRef.current;
 
-      layout.sync(p.state, p.commitIndex, { branchLanes: p.branchLanes });
+      layout.sync(p.state, p.commitIndex, { excludePatterns: p.excludePatterns });
       layout.tick();
 
       if (p.autoFit && !camera.userAdjusted) {
@@ -222,9 +223,14 @@ export default function WebGLVisualizer({
       lerpCamera(camera, dt);
 
       const nodes = layout.getNodes().filter((n) => isNodeVisible(n, p.commitIndex));
-      const neighborSet = p.selectedPath
-        ? getNeighborSet(p.state, p.selectedPath)
-        : null;
+      const focusSet = resolveFocusSet(
+        p.state,
+        p.commitIndex,
+        p.selectedPath,
+        p.selectedCluster,
+        p.excludePatterns,
+      );
+      const dimOthers = focusSet.size > 0;
       const positions = new Float32Array(nodes.length * 2);
       const sizes = new Float32Array(nodes.length);
       const colors = new Float32Array(nodes.length * 3);
@@ -234,8 +240,8 @@ export default function WebGLVisualizer({
         positions[i * 2 + 1] = n.y;
         let [r, g, b] = hueToRgb(p.palette, n.dir);
         let size = Math.max(4, n.r * 2);
-        if (neighborSet) {
-          if (!neighborSet.has(n.path)) {
+        if (dimOthers) {
+          if (!focusSet.has(n.path)) {
             r *= 0.15;
             g *= 0.15;
             b *= 0.15;
@@ -287,8 +293,19 @@ export default function WebGLVisualizer({
         nodes,
         clusters: layout.getClusterCenters(),
         selectedPath: p.selectedPath,
-        neighborSet: neighborSet || new Set(),
-        dimOthers: !!neighborSet,
+        focusSet,
+        dimOthers,
+        excludePatterns: p.excludePatterns,
+      }, p.palette, 'galaxy', clusterColorFor);
+      drawInspectNodeLabels(labelCtx, {
+        w,
+        h,
+        nodes,
+        clusters: layout.getClusterCenters(),
+        selectedPath: p.selectedPath,
+        focusSet,
+        dimOthers,
+        excludePatterns: p.excludePatterns,
       }, p.palette, 'galaxy', clusterColorFor);
       labelCtx.restore();
 

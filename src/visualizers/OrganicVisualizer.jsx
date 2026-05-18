@@ -2,7 +2,8 @@ import React, { useMemo, useRef } from 'react';
 import { useVisualizerCore } from './useVisualizerCore.js';
 import { clusterColorFor } from '../engine/colors.js';
 import {
-  applyNodeAlpha, drawClusterLabels, drawHighlightLinks, drawSelectionRing, linkAlpha,
+  applyNodeAlpha, drawClusterLabels, drawHighlightLinks, drawInspectNodeLabels,
+  drawSelectionRing, linkAlpha,
   nodeDrawRadius, safeRadius, shouldDrawRipple, shouldGlow,
 } from './drawHelpers.js';
 
@@ -13,7 +14,7 @@ import {
  * radiating outward, and connective tissue between feature areas.
  */
 export default function OrganicVisualizer({
-  state, commitIndex, palette, autoFit, selectedPath, onNodeClick, branchLanes, cameraApiRef,
+  state, commitIndex, palette, autoFit, selectedPath, onNodeClick, cameraApiRef,
 }) {
   const hostRef = useRef(null);
 
@@ -25,7 +26,7 @@ export default function OrganicVisualizer({
   ], []);
 
   useVisualizerCore({
-    hostRef, state, commitIndex, autoFit, selectedPath, onNodeClick, branchLanes, cameraApiRef,
+    hostRef, state, commitIndex, autoFit, selectedPath, onNodeClick, cameraApiRef,
     clearStrategy: 'trail',
     trailAlpha: 0.38,
     background: '#020a10',
@@ -172,6 +173,7 @@ function drawOrganic(ctx, frame, { caustics, palette }) {
   }
 
   drawClusterLabels(ctx, frame, palette, 'organic', clusterColorFor);
+  drawInspectNodeLabels(ctx, frame, palette, 'organic', clusterColorFor);
 
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
