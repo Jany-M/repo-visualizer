@@ -17,6 +17,13 @@ an animated force-directed network. Each top-level directory is a feature
 cluster; each file is a node sized by code churn; each import is an edge.
 A commit advances the timeline and triggers a ripple from every touched file.
 
+**Features**
+
+- **Growth over time** — nodes appear and disappear as you move through history; the timeline scrubs quickly with a virtualized scrubber
+- **Canvas navigation** — zoom and pan; **Auto fit** keeps the growing graph in view while playback runs
+- **File inspector** — click a node to see import dependencies (`Depends on` / `Imported in`) and recent commits that touched it
+- **Large repos** — optional WebGL renderer when node count is high, with automatic Canvas fallback if WebGL is unavailable
+
 Four visual themes are included, all switchable live:
 
 - **Galaxy** — Deep space, glowing stars, supernova ripples. The default.
@@ -177,9 +184,10 @@ ffmpeg -i repo-visualizer-timeline.webm -c:v libx264 -crf 18 output.mp4
    each node toward its top-level directory's center on a ring. The simulation
    runs continuously and warm-restarts when nodes are added.
 
-4. **`src/visualizers/`** contains four `<canvas>`-based renderers that share
-   a common `useVisualizerCore` hook for canvas setup, RAF loop, and ripple
-   tracking. Each visualizer just provides a `draw(ctx, frame)` function.
+4. **`src/visualizers/`** contains four `<canvas>`-based renderers (plus an
+   optional **WebGL** path for large graphs) that share a common
+   `useVisualizerCore` hook for canvas setup, RAF loop, and ripple tracking.
+   Each Canvas visualizer provides a `draw(ctx, frame)` function.
 
 5. **`src/engine/recorder.js`** records the active canvas to WebM via
    `canvas.captureStream()` + `MediaRecorder`, or to GIF via gif.js.
@@ -228,22 +236,6 @@ repo-visualizer/
 | --- | --- |
 | **Netlify** | Static build (`npm run build`) with the bundled demo. See `netlify.toml`. |
 | **Local** | Full app: `npm run analyze -- /path/to/your/repo` then `npm run dev`. No server or in-project cloning required. |
-
----
-
-## Roadmap
-
-Shipped in this build:
-
-- Growth visibility (nodes appear as commits advance), faster timeline seek, virtualized scrubber
-- Canvas zoom/pan and auto-fit while playing
-- Click-to-inspect nodes (imports + commit touches)
-- Optional WebGL renderer when node count is high (Canvas fallback if unavailable)
-- Branch-aware layout toggle (re-analyze repo to include parent metadata)
-
-Still open:
-
-- **AI feature labeling** — group commits into named features via an LLM pass
 
 ---
 
