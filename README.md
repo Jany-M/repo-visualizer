@@ -20,9 +20,12 @@ A commit advances the timeline and triggers a ripple from every touched file.
 **Features**
 
 - **Growth over time** — nodes appear and disappear as you move through history; the timeline scrubs quickly with a virtualized scrubber
-- **Canvas navigation** — zoom and pan; **Auto fit** keeps the growing graph in view while playback runs
+- **Final state** — jump to the end of history in one action (toolbar button or `End` key); large repos show a progress bar while the graph catches up
+- **Canvas navigation** — zoom and pan; **Auto fit** (on by default) keeps the growing graph in view while playback runs
 - **File inspector** — click a node to see import dependencies (`Depends on` / `Imported in`) and recent commits that touched it
-- **Large repos** — optional WebGL renderer when node count is high, with automatic Canvas fallback if WebGL is unavailable
+- **Legend focus** — click a cluster in the legend to highlight that folder and dim everything else; click again or press `Esc` to clear
+- **Render quality** — **Auto-Res** switches to fast GPU rendering only when the graph is very large; **Hi-Res** / **Low-Res** force canvas or WebGL
+- **Large repos** — WebGL point renderer for Galaxy at high node counts, with automatic canvas fallback if WebGL is unavailable
 
 Four visual themes are included, all switchable live:
 
@@ -143,7 +146,8 @@ npm run analyze -- /path/to/your/repo --config=/path/to/repovisualizer.config.js
 | `2` | Organic theme |
 | `3` | Neural theme |
 | `4` | Minimal theme |
-| `Esc` | Clear node selection |
+| `End` | Jump to final state (all commits) |
+| `Esc` | Stop recording, close export panel, or clear selection / cluster focus |
 
 **Canvas:** scroll to zoom, drag to pan. Use **Auto fit** (on by default) to keep the growing graph in view while playing. Click a node to inspect its imports and commit history.
 
@@ -151,9 +155,11 @@ npm run analyze -- /path/to/your/repo --config=/path/to/repovisualizer.config.js
 
 ## Export to video
 
-Click **Export** in the bottom-right. Choose format, frame rate, and
+Click **Export** in the header (top-right). Choose format, frame rate, and
 resolution. The app restarts the timeline and records the active canvas
 directly via `MediaRecorder` (for WebM) or `gif.js` (for animated GIF).
+Exports burn in the **repository name** (top), **commit date** (top-right),
+and **primary author** (bottom) on the recording only — not during normal playback.
 
 **WebM** is the most reliable format and is supported by every modern player
 including VLC, QuickTime (10.7+), and the macOS / Windows media stack. To
@@ -205,13 +211,15 @@ repo-visualizer/
 │   ├── App.jsx             # Main app shell
 │   ├── main.jsx            # React entry
 │   ├── styles.css          # Global styles
-│   ├── components/         # Header, ControlBar, Timeline, etc.
+│   ├── components/         # Header, ControlBar, Timeline, ExportPanel, etc.
 │   ├── engine/
 │   │   ├── graphState.js   # Incremental node + edge state
 │   │   ├── layout.js       # d3-force simulation wrapper
-│   │   ├── useTimeline.js  # Playback hook
+│   │   ├── useTimeline.js  # Playback + final-state rebuild
 │   │   ├── useDataset.js   # Loads history.json or demo
+│   │   ├── excludes.js     # Path / cluster exclude matching
 │   │   ├── colors.js       # Per-style color palettes
+│   │   ├── recordingOverlay.js  # Titles drawn on export recordings
 │   │   └── recorder.js     # Canvas → WebM / GIF
 │   ├── visualizers/
 │   │   ├── useVisualizerCore.js  # Shared canvas + RAF + ripple plumbing
