@@ -35,6 +35,11 @@ export function getDefaultExcludes() {
   return [...DEFAULT_EXCLUDE_PATTERNS];
 }
 
+/** Built-in + repovisualizer.config.json patterns (stored in history.json for the app). */
+export function getEffectiveExcludes() {
+  return [...DEFAULT_EXCLUDE_PATTERNS, ...customExcludePatterns];
+}
+
 /** @param {string} filePath repo-relative path */
 export function shouldIncludeFile(filePath) {
   const norm = filePath.split(path.sep).join('/').replace(/^\.\//, '');

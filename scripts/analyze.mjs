@@ -14,11 +14,16 @@
  */
 
 import { simpleGit } from 'simple-git';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, copyFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { shouldIncludeFile, setCustomExcludes, getDefaultExcludes } from './includeFile.mjs';
+import {
+  shouldIncludeFile,
+  setCustomExcludes,
+  getDefaultExcludes,
+  getEffectiveExcludes,
+} from './includeFile.mjs';
 import { loadAnalyzeConfig } from './loadConfig.mjs';
 import { PARSERS, ANALYZER_LANGUAGES } from './importParsers.mjs';
 import { createImportResolver, loadJsAliases, resolveChangeImports } from './importResolve.mjs';
@@ -92,6 +97,7 @@ async function analyze() {
     totalCommits: commits.length,
     firstCommit: commits[0]?.hash,
     lastCommit: commits[commits.length - 1]?.hash,
+    exclude: getEffectiveExcludes(),
     commits: [],
   };
 
@@ -144,19 +150,12 @@ async function analyze() {
       changes.push(change);
     }
 
-    const parents = (commit.parent || '')
-      .split(/\s+/)
-      .map((p) => p.trim())
-      .filter(Boolean);
-
     out.commits.push({
       sha: commit.hash,
       shortSha: commit.hash.slice(0, 7),
       date: commit.date,
       author: commit.author_name,
       authorEmail: commit.author_email,
-      parents,
-      isMerge: parents.length > 1,
       message: commit.message.split('\n')[0].slice(0, 200),
       stats: {
         filesChanged: changes.length,
@@ -190,6 +189,11 @@ async function analyze() {
 
   await mkdir(path.dirname(outPath), { recursive: true });
   await writeFile(outPath, JSON.stringify(out));
+
+  if (analyzeConfig.configPath) {
+    const publicConfig = path.join(repoRoot, 'public', 'repovisualizer.config.json');
+    await copyFile(analyzeConfig.configPath, publicConfig);
+  }
 
   const sizeKb = Math.round((await readFile(outPath)).byteLength / 1024);
   console.log(`✓ Wrote ${outPath} (${sizeKb} KB)`);
