@@ -1,6 +1,7 @@
 import React from 'react';
 import Timeline from './Timeline.jsx';
 import StylePicker from './StylePicker.jsx';
+import PerfModePicker from './PerfModePicker.jsx';
 
 const PlayIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -22,24 +23,11 @@ const RestartIcon = () => (
   </svg>
 );
 
-/** perfMode values: auto | off (canvas) | on (WebGL) */
-const PERF_MODES = [
-  {
-    value: 'auto',
-    label: 'Auto Res',
-    title: 'Use fast GPU rendering only when the graph is very large',
-  },
-  {
-    value: 'off',
-    label: 'Hi-Res',
-    title: 'Full canvas — import lines, effects, and richest visuals',
-  },
-  {
-    value: 'on',
-    label: 'Low-Res',
-    title: 'Fast GPU points — best for huge repos, fewer visual details',
-  },
-];
+const FinalStateIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+    <path d="M3 3h2v10H3V3zm4 0h2v10H7V3zm4 0h5v2h-3v2h3v2h-3v4H9V3z" />
+  </svg>
+);
 
 export default function ControlBar({
   commits,
@@ -48,19 +36,22 @@ export default function ControlBar({
   speed,
   speeds,
   onTogglePlay,
+  onGoToFinal,
+  buildingFinal = false,
+  buildProgress = 0,
+  atFinal = false,
   onSeek,
   onSetSpeed,
   onRestart,
   style,
   onStyleChange,
-  autoFit,
+  autoFit = true,
   onAutoFitChange,
   onZoomIn,
   onZoomOut,
   onZoomReset,
   perfMode,
   onPerfModeChange,
-  visibleCount,
 }) {
   return (
     <div className="control-bar">
@@ -69,13 +60,25 @@ export default function ControlBar({
         <button className="btn" onClick={onRestart} title="Restart" type="button">
           <span className="icon"><RestartIcon /></span>
         </button>
-        <button className="btn btn-play" onClick={onTogglePlay} title={playing ? 'Pause' : 'Play'} type="button">
+        <button
+          className="btn btn-play"
+          onClick={onTogglePlay}
+          title={playing ? 'Pause' : 'Play'}
+          type="button"
+          disabled={buildingFinal}
+        >
           {playing ? <PauseIcon /> : <PlayIcon />}
         </button>
-        <div className="commit-counter commit-counter--inline">
-          {index < 0 ? '00' : String(index + 1).padStart(2, '0')}
-          <span className="dim"> / {String(commits.length).padStart(2, '0')}</span>
-        </div>
+        <button
+          type="button"
+          className={`btn btn-final-state${atFinal ? ' is-active' : ''}`}
+          onClick={onGoToFinal}
+          disabled={buildingFinal || atFinal || !commits.length}
+          title={atFinal ? 'At final state' : 'Load final state (all commits)'}
+          aria-busy={buildingFinal}
+        >
+          <FinalStateIcon />
+        </button>
       </div>
       <div className="control-row control-row--extended">
         <div className="speed-control">
@@ -89,38 +92,24 @@ export default function ControlBar({
           <button type="button" className="btn btn-sm" onClick={onZoomReset} title="Reset view">◎</button>
           <button type="button" className="btn btn-sm" onClick={onZoomIn}>+</button>
         </div>
-        <label className="toggle-chip" title="Auto zoom to fit graph while playing">
-          <input type="checkbox" checked={autoFit} onChange={(e) => onAutoFitChange(e.target.checked)} />
-          Auto fit
-        </label>
-        <div
-          className="perf-control"
-          role="group"
-          aria-label="Rendering quality"
+        <button
+          type="button"
+          role="switch"
+          aria-checked={autoFit}
+          className={`toggle-switch${autoFit ? ' is-on' : ''}`}
+          title="Auto zoom to fit graph while playing"
+          onClick={() => onAutoFitChange(!autoFit)}
         >
-          <span className="perf-control-label">VIEW</span>
-          <div className="perf-mode-picker">
-            {PERF_MODES.map((mode) => (
-              <button
-                key={mode.value}
-                type="button"
-                className={`perf-mode-btn${perfMode === mode.value ? ' active' : ''}`}
-                aria-pressed={perfMode === mode.value}
-                title={mode.title}
-                onClick={() => onPerfModeChange(mode.value)}
-              >
-                {mode.label}
-              </button>
-            ))}
-          </div>
+          <span className="toggle-switch-track" aria-hidden="true">
+            <span className="toggle-switch-thumb" />
+          </span>
+          <span className="toggle-switch-label">Auto fit</span>
+        </button>
+        <div className="perf-control">
+          <PerfModePicker perfMode={perfMode} onChange={onPerfModeChange} />
         </div>
         <StylePicker style={style} onChange={onStyleChange} />
         <div className="spacer" />
-        <div className="commit-counter commit-counter--extended">
-          {index < 0 ? '00' : String(index + 1).padStart(2, '0')}
-          <span className="dim"> / {String(commits.length).padStart(2, '0')}</span>
-          <span className="dim node-count"> · {visibleCount} nodes</span>
-        </div>
       </div>
     </div>
   );

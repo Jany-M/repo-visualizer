@@ -23,9 +23,17 @@ function ExportIcon() {
   );
 }
 
+function formatTimelinePosition(index, total) {
+  const cur = index < 0 ? '00' : String(index + 1).padStart(2, '0');
+  const max = String(total).padStart(2, '0');
+  return { cur, max };
+}
+
 export default function Header({
   dataset,
   source,
+  commitIndex = -1,
+  commitCount = 0,
   currentCommit,
   exportOpen,
   onToggleExport,
@@ -48,6 +56,7 @@ export default function Header({
 }) {
   if (!dataset) return null;
   const ts = currentCommit ? new Date(currentCommit.date) : null;
+  const { cur, max } = formatTimelinePosition(commitIndex, commitCount || dataset.commits?.length || 0);
   const recPct = Math.round(Math.min(1, Math.max(0, recordingProgress)) * 100);
   const encPct = Math.round(Math.min(1, Math.max(0, encodeProgress)) * 100);
   const encodeLabel = encodeFormat === 'gif' ? 'GIF' : 'video';
@@ -87,9 +96,10 @@ export default function Header({
           <div className="repo-name-row">
             <div className="repo-name">{dataset.repo}</div>
           </div>
-          <div className="repo-meta-detail">
-            {dataset.totalCommits} commits
-            {source === 'demo' && ' · demo dataset'}
+          <div className="repo-meta-detail repo-meta-timeline" aria-live="polite">
+            <span>{cur}</span>
+            <span className="repo-meta-dim"> / {max}</span>
+            {source === 'demo' && <span className="repo-meta-dim"> · demo</span>}
           </div>
           {ts && (
             <div className="repo-meta-detail">

@@ -57,7 +57,10 @@ export default function Legend({
               onClusterSelect?.(active ? null : cluster);
             }}
           >
-            <span className="legend-dot" style={{ background: color.core, color: color.core }} />
+            <span
+              className="legend-dot"
+              style={{ background: color.swatch ?? color.core }}
+            />
             <span className="legend-label">{cluster}</span>
             <span className="legend-count">{count}</span>
           </button>

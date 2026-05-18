@@ -1,6 +1,23 @@
 import React, { useEffect, useState } from 'react';
 
-export default function CommitCard({ commit }) {
+const CollapseIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+    <path d="M4 8h8M9 5l3 3-3 3" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const ExpandIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+    <path d="M12 8H4M7 5 4 8l3 3" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+export default function CommitCard({
+  commit,
+  collapsed = false,
+  collapsible = false,
+  onToggleCollapse,
+}) {
   const [entering, setEntering] = useState(false);
   useEffect(() => {
     setEntering(true);
@@ -8,9 +25,38 @@ export default function CommitCard({ commit }) {
     return () => clearTimeout(id);
   }, [commit?.sha]);
 
+  if (collapsible && collapsed) {
+    return (
+      <button
+        type="button"
+        className="commit-card-tab"
+        onClick={onToggleCollapse}
+        title="Show commit details"
+        aria-expanded="false"
+      >
+        <ExpandIcon />
+        <span>Commit</span>
+      </button>
+    );
+  }
+
+  const collapseBtn = collapsible ? (
+    <button
+      type="button"
+      className="commit-card-collapse"
+      onClick={onToggleCollapse}
+      title="Minimize commit panel"
+      aria-label="Minimize commit panel"
+      aria-expanded="true"
+    >
+      <CollapseIcon />
+    </button>
+  ) : null;
+
   if (!commit) {
     return (
       <div className="commit-card">
+        {collapseBtn}
         <div className="commit-sha">·</div>
         <div className="commit-message" style={{ color: 'var(--fg-muted)' }}>
           Press play to begin the journey
@@ -26,6 +72,7 @@ export default function CommitCard({ commit }) {
 
   return (
     <div className={`commit-card ${entering ? 'entering' : ''}`}>
+      {collapseBtn}
       <div className="commit-sha">{commit.shortSha}</div>
       <div className="commit-message">{commit.message}</div>
       <div className="commit-byline">
