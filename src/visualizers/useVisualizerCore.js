@@ -7,14 +7,13 @@ import { createLayout } from '../engine/layout.js';
 import {
   createCamera,
   applyCameraTransform,
-  screenToWorld,
   zoomAt,
-  panBy,
   resetCamera,
   fitBounds,
   lerpCamera,
   snapCamera,
 } from '../engine/camera.js';
+import { attachCanvasGestures } from '../engine/canvasGestures.js';
 import { isNodeVisible, nodeOpacity } from '../engine/visibility.js';
 import { getDepsForPath, resolveFocusSet } from '../engine/graphState.js';
 import { drawRecordingOverlay } from '../engine/recordingOverlay.js';
@@ -44,7 +43,6 @@ export function useVisualizerCore({
   const ripplesRef = useRef([]);
   const lastCommitIdxRef = useRef(-1);
   const stateRef = useRef(state);
-  const dragRef = useRef(null);
   const paramsRef = useRef({
     draw, onBeforeDraw, onScreenDraw, onScreenOverlay, clearStrategy, trailAlpha, background,
     autoFit, selectedPath, selectedCluster, excludePatterns, onNodeClick, commitIndex,
@@ -88,6 +86,7 @@ export function useVisualizerCore({
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+    host.style.touchAction = 'none';
     const canvas = document.createElement('canvas');
     canvas.style.width = '100%';
     canvas.style.height = '100%';
@@ -121,70 +120,18 @@ export function useVisualizerCore({
     const ro = new ResizeObserver(resize);
     ro.observe(host);
 
-    const onWheel = (ev) => {
-      ev.preventDefault();
-      const rect = canvas.getBoundingClientRect();
-      const sx = ev.clientX - rect.left;
-      const sy = ev.clientY - rect.top;
-      const factor = ev.deltaY < 0 ? 1.1 : 1 / 1.1;
-      zoomAt(cameraRef.current, sx, sy, factor);
-    };
+    const detachGestures = attachCanvasGestures(canvas, {
+      getCamera: () => cameraRef.current,
+      getLayout: () => layoutRef.current,
+      getCommitIndex: () => paramsRef.current.commitIndex,
+      onNodeClick: (path) => paramsRef.current.onNodeClick?.(path),
+    });
 
-    const onPointerDown = (ev) => {
-      if (ev.button !== 0) return;
-      dragRef.current = {
-        startX: ev.clientX,
-        startY: ev.clientY,
-        x: ev.clientX,
-        y: ev.clientY,
-        panning: true,
-      };
-      canvas.style.cursor = 'grabbing';
-    };
-
-    const onPointerMove = (ev) => {
-      if (!dragRef.current?.panning) return;
-      const dx = ev.clientX - dragRef.current.x;
-      const dy = ev.clientY - dragRef.current.y;
-      dragRef.current.x = ev.clientX;
-      dragRef.current.y = ev.clientY;
-      panBy(cameraRef.current, dx, dy);
-    };
-
-    const onPointerUp = (ev) => {
-      if (!dragRef.current) return;
-      const moved = Math.hypot(
-        ev.clientX - dragRef.current.startX,
-        ev.clientY - dragRef.current.startY,
-      );
-      if (dragRef.current.panning && moved < 4 && paramsRef.current.onNodeClick) {
-        const rect = canvas.getBoundingClientRect();
-        const sx = ev.clientX - rect.left;
-        const sy = ev.clientY - rect.top;
-        const world = screenToWorld(cameraRef.current, sx, sy);
-        const nodes = layout.getNodes();
-        const idx = paramsRef.current.commitIndex;
-        let best = null;
-        let bestD = Infinity;
-        for (const n of nodes) {
-          if (!isNodeVisible(n, idx)) continue;
-          const d = Math.hypot(n.x - world.x, n.y - world.y);
-          const hit = n.r + 6 / cameraRef.current.scale;
-          if (d < hit && d < bestD) {
-            bestD = d;
-            best = n.path;
-          }
-        }
-        paramsRef.current.onNodeClick(best);
-      }
-      dragRef.current = null;
-      canvas.style.cursor = 'grab';
-    };
-
-    canvas.addEventListener('wheel', onWheel, { passive: false });
-    canvas.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
+    const onPointerDownCursor = () => { canvas.style.cursor = 'grabbing'; };
+    const onPointerUpCursor = () => { canvas.style.cursor = 'grab'; };
+    canvas.addEventListener('pointerdown', onPointerDownCursor);
+    canvas.addEventListener('pointerup', onPointerUpCursor);
+    canvas.addEventListener('pointercancel', onPointerUpCursor);
 
     let raf;
     let lastTime = performance.now();
@@ -322,10 +269,10 @@ export function useVisualizerCore({
       cancelAnimationFrame(raf);
       ro.disconnect();
       layout.stop();
-      canvas.removeEventListener('wheel', onWheel);
-      canvas.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
+      detachGestures();
+      canvas.removeEventListener('pointerdown', onPointerDownCursor);
+      canvas.removeEventListener('pointerup', onPointerUpCursor);
+      canvas.removeEventListener('pointercancel', onPointerUpCursor);
       if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
     };
   }, []);

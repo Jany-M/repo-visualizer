@@ -83,6 +83,11 @@ button:focus-visible {
   position: absolute;
   inset: 0;
   z-index: 0;
+  touch-action: none;
+}
+
+.stage canvas {
+  touch-action: none;
 }
 
 /* ───────── Header ───────── */

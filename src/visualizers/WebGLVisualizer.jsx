@@ -6,8 +6,9 @@ import React, { useEffect, useRef } from 'react';
 import { createLayout } from '../engine/layout.js';
 import {
   applyCameraTransform,
-  createCamera, zoomAt, panBy, fitBounds, lerpCamera, snapCamera, screenToWorld,
+  createCamera, fitBounds, lerpCamera, snapCamera,
 } from '../engine/camera.js';
+import { attachCanvasGestures } from '../engine/canvasGestures.js';
 import { resolveFocusSet } from '../engine/graphState.js';
 import { isNodeVisible } from '../engine/visibility.js';
 import { clusterColor, clusterColorFor, paletteEntry } from '../engine/colors.js';
@@ -156,62 +157,12 @@ export default function WebGLVisualizer({
     const ro = new ResizeObserver(resize);
     ro.observe(host);
 
-    const dragRef = { current: null };
-
-    const onWheel = (ev) => {
-      ev.preventDefault();
-      const rect = canvas.getBoundingClientRect();
-      zoomAt(camera, ev.clientX - rect.left, ev.clientY - rect.top, ev.deltaY < 0 ? 1.1 : 1 / 1.1);
-    };
-
-    const onPointerDown = (ev) => {
-      if (ev.button !== 0) return;
-      dragRef.current = {
-        startX: ev.clientX,
-        startY: ev.clientY,
-        x: ev.clientX,
-        y: ev.clientY,
-        panning: true,
-      };
-    };
-
-    const onPointerMove = (ev) => {
-      if (!dragRef.current?.panning) return;
-      panBy(camera, ev.clientX - dragRef.current.x, ev.clientY - dragRef.current.y);
-      dragRef.current.x = ev.clientX;
-      dragRef.current.y = ev.clientY;
-    };
-
-    const onPointerUp = (ev) => {
-      if (!dragRef.current) return;
-      const moved = Math.hypot(
-        ev.clientX - dragRef.current.startX,
-        ev.clientY - dragRef.current.startY,
-      );
-      const p = propsRef.current;
-      if (dragRef.current.panning && moved < 4 && p.onNodeClick) {
-        const rect = canvas.getBoundingClientRect();
-        const world = screenToWorld(camera, ev.clientX - rect.left, ev.clientY - rect.top);
-        const nodes = layout.getNodes().filter((n) => isNodeVisible(n, p.commitIndex));
-        let best = null;
-        let bestD = Infinity;
-        for (const n of nodes) {
-          const d = Math.hypot(n.x - world.x, n.y - world.y);
-          const hit = n.r + 6 / camera.scale;
-          if (d < hit && d < bestD) {
-            bestD = d;
-            best = n.path;
-          }
-        }
-        p.onNodeClick(best);
-      }
-      dragRef.current = null;
-    };
-
-    canvas.addEventListener('wheel', onWheel, { passive: false });
-    canvas.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
+    const detachGestures = attachCanvasGestures(canvas, {
+      getCamera: () => camera,
+      getLayout: () => layout,
+      getCommitIndex: () => propsRef.current.commitIndex,
+      onNodeClick: (path) => propsRef.current.onNodeClick?.(path),
+    });
 
     let last = performance.now();
     let lastSyncKey = '';
@@ -365,14 +316,11 @@ export default function WebGLVisualizer({
       cancelAnimationFrame(raf);
       ro.disconnect();
       layout.stop();
-      canvas.removeEventListener('wheel', onWheel);
-      canvas.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
+      detachGestures();
       if (labelCanvas?.parentNode) labelCanvas.parentNode.removeChild(labelCanvas);
       if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
     };
   }, [onInitFailed]);
 
-  return <div ref={hostRef} style={{ width: '100%', height: '100%' }} />;
+  return <div ref={hostRef} style={{ width: '100%', height: '100%', touchAction: 'none' }} />;
 }
