@@ -21,11 +21,12 @@ A commit advances the timeline and triggers a ripple from every touched file.
 
 - **Growth over time** — nodes appear and disappear as you move through history; the timeline scrubs quickly with a virtualized scrubber
 - **Final state** — jump to the end of history in one action (toolbar button or `End` key); large repos show a progress bar while the graph catches up
-- **Canvas navigation** — zoom and pan; **Auto fit** (on by default) keeps the growing graph in view while playback runs
+- **Canvas navigation** — scroll or pinch to zoom, drag to pan; on phones and tablets use **one finger to pan** and **pinch to zoom** on the graph. **Auto fit** (on by default) keeps the growing graph in view while playback runs
 - **File inspector** — click a node to see import dependencies (`Depends on` / `Imported in`) and recent commits that touched it
 - **Legend focus** — click a cluster in the legend to highlight that folder and dim everything else; click again or press `Esc` to clear
 - **Render quality** — **Auto-Res** switches to fast GPU rendering only when the graph is very large; **Hi-Res** / **Low-Res** force canvas or WebGL
 - **Large repos** — WebGL point renderer for Galaxy at high node counts, with automatic canvas fallback if WebGL is unavailable
+- **Mobile layout** — playback controls (restart, play, final state) stay visible under the timeline; speed, themes, zoom, and other options live in the expandable **Controls** panel; **Info** opens the commit card and cluster legend
 
 Four visual themes are included, all switchable live:
 
@@ -95,7 +96,7 @@ The analyzer parses **imports** on changed files and resolves them to other path
 | PHP | `.php` | `use`, `require`/`include`, `__DIR__` joins, dotted namespace paths |
 | CSS / SCSS / Sass / Less | `.css` `.scss` `.sass` `.less` | `@import` |
 
-Any other file type still appears as a **node** (sized by churn) but does not add import **edges**. Re-run `npm run analyze` after upgrading the analyzer so `history.json` picks up improved resolution.
+Any other file type appears as a **node** (sized by churn) but does not add import **edges**. Re-run `npm run analyze` after upgrading the analyzer so `history.json` picks up improved resolution.
 
 ### Auto-excluded paths (every repo)
 
@@ -149,7 +150,7 @@ npm run analyze -- /path/to/your/repo --config=/path/to/repovisualizer.config.js
 | `End` | Jump to final state (all commits) |
 | `Esc` | Stop recording, close export panel, or clear selection / cluster focus |
 
-**Canvas:** scroll to zoom, drag to pan. Use **Auto fit** (on by default) to keep the growing graph in view while playing. Click a node to inspect its imports and commit history.
+**Canvas (desktop):** scroll to zoom, drag to pan. **Touch (mobile/tablet):** pinch to zoom, one finger to drag the graph, tap a node to inspect it. Use **Auto fit** (on by default) to keep the growing graph in view while playing.
 
 ---
 
@@ -218,6 +219,7 @@ repo-visualizer/
 │   │   ├── useTimeline.js  # Playback + final-state rebuild
 │   │   ├── useDataset.js   # Loads history.json or demo
 │   │   ├── excludes.js     # Path / cluster exclude matching
+│   │   ├── canvasGestures.js  # Pan, pinch-zoom, tap on graph canvas
 │   │   ├── colors.js       # Per-style color palettes
 │   │   ├── recordingOverlay.js  # Titles drawn on export recordings
 │   │   └── recorder.js     # Canvas → WebM / GIF
