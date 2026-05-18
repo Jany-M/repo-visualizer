@@ -56,60 +56,62 @@ export default function ControlBar({
   return (
     <div className="control-bar">
       <Timeline commits={commits} index={index} onSeek={onSeek} />
-      <div className="control-row control-row--essential">
-        <button className="btn" onClick={onRestart} title="Restart" type="button">
-          <span className="icon"><RestartIcon /></span>
-        </button>
-        <button
-          className="btn btn-play"
-          onClick={onTogglePlay}
-          title={playing ? 'Pause' : 'Play'}
-          type="button"
-          disabled={buildingFinal}
-        >
-          {playing ? <PauseIcon /> : <PlayIcon />}
-        </button>
-        <button
-          type="button"
-          className={`btn btn-final-state${atFinal ? ' is-active' : ''}`}
-          onClick={onGoToFinal}
-          disabled={buildingFinal || atFinal || !commits.length}
-          title={atFinal ? 'At final state' : 'Load final state (all commits)'}
-          aria-busy={buildingFinal}
-        >
-          <FinalStateIcon />
-        </button>
-      </div>
-      <div className="control-row control-row--extended">
-        <div className="speed-control">
-          <span>SPEED</span>
-          <select value={speed} onChange={(e) => onSetSpeed(e.target.value)}>
-            {speeds.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+      <div className="control-cluster">
+        <div className="control-row control-row--playback">
+          <button className="btn" onClick={onRestart} title="Restart" type="button">
+            <span className="icon"><RestartIcon /></span>
+          </button>
+          <button
+            className="btn btn-play"
+            onClick={onTogglePlay}
+            title={playing ? 'Pause' : 'Play'}
+            type="button"
+            disabled={buildingFinal}
+          >
+            {playing ? <PauseIcon /> : <PlayIcon />}
+          </button>
+          <button
+            type="button"
+            className={`btn btn-final-state${atFinal ? ' is-active' : ''}`}
+            onClick={onGoToFinal}
+            disabled={buildingFinal || atFinal || !commits.length}
+            title={atFinal ? 'At final state' : 'Load final state (all commits)'}
+            aria-busy={buildingFinal}
+          >
+            <FinalStateIcon />
+          </button>
         </div>
-        <div className="zoom-control" title="Canvas zoom">
-          <button type="button" className="btn btn-sm" onClick={onZoomOut}>−</button>
-          <button type="button" className="btn btn-sm" onClick={onZoomReset} title="Reset view">◎</button>
-          <button type="button" className="btn btn-sm" onClick={onZoomIn}>+</button>
+        <div className="control-row control-row--tools">
+          <div className="speed-control">
+            <span>SPEED</span>
+            <select value={speed} onChange={(e) => onSetSpeed(e.target.value)}>
+              {speeds.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div className="zoom-control" title="Canvas zoom">
+            <button type="button" className="btn btn-sm" onClick={onZoomOut}>−</button>
+            <button type="button" className="btn btn-sm" onClick={onZoomReset} title="Reset view">◎</button>
+            <button type="button" className="btn btn-sm" onClick={onZoomIn}>+</button>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoFit}
+            className={`toggle-switch${autoFit ? ' is-on' : ''}`}
+            title="Auto zoom to fit graph while playing"
+            onClick={() => onAutoFitChange(!autoFit)}
+          >
+            <span className="toggle-switch-track" aria-hidden="true">
+              <span className="toggle-switch-thumb" />
+            </span>
+            <span className="toggle-switch-label">Auto fit</span>
+          </button>
+          <div className="perf-control">
+            <PerfModePicker perfMode={perfMode} onChange={onPerfModeChange} />
+          </div>
+          <StylePicker style={style} onChange={onStyleChange} />
+          <div className="spacer" />
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={autoFit}
-          className={`toggle-switch${autoFit ? ' is-on' : ''}`}
-          title="Auto zoom to fit graph while playing"
-          onClick={() => onAutoFitChange(!autoFit)}
-        >
-          <span className="toggle-switch-track" aria-hidden="true">
-            <span className="toggle-switch-thumb" />
-          </span>
-          <span className="toggle-switch-label">Auto fit</span>
-        </button>
-        <div className="perf-control">
-          <PerfModePicker perfMode={perfMode} onChange={onPerfModeChange} />
-        </div>
-        <StylePicker style={style} onChange={onStyleChange} />
-        <div className="spacer" />
       </div>
     </div>
   );

@@ -1083,6 +1083,13 @@ button:focus-visible {
   flex-direction: column;
   gap: 12px;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent);
+  --control-stack-height: 108px;
+}
+
+.control-cluster {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .app[data-style='minimal'] .control-bar {
@@ -1397,7 +1404,7 @@ button:focus-visible {
 
 .legend {
   position: absolute;
-  bottom: 130px;
+  bottom: calc(var(--control-stack-height) + 28px);
   right: 28px;
   z-index: 9;
   padding: 14px 18px;
@@ -1408,6 +1415,9 @@ button:focus-visible {
   font-size: 12px;
   color: var(--fg-muted);
   max-width: 240px;
+  max-height: min(360px, calc(100vh - var(--control-stack-height) - 160px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .legend h4 {
@@ -1626,6 +1636,45 @@ button:focus-visible {
 ::-webkit-scrollbar-thumb { background: var(--hairline-strong); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--fg-dim); }
 
+/* ───────── Desktop control bar (single tool row) ───────── */
+
+@media (min-width: 1024px) {
+  .control-bar {
+    gap: 10px;
+    padding: 10px 28px 16px;
+    --control-stack-height: 88px;
+  }
+
+  .control-cluster {
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+  }
+
+  .control-row--playback {
+    flex-shrink: 0;
+    padding-right: 14px;
+    border-right: 1px solid var(--hairline);
+  }
+
+  .control-row--tools {
+    flex: 1;
+    min-width: 0;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .legend {
+    bottom: auto;
+    top: clamp(148px, 38vh, 52vh);
+    max-height: min(400px, calc(100vh - var(--control-stack-height) - 180px));
+    transform: translateY(-12%);
+  }
+}
+
 /* ───────── Mobile / tablet (desktop layout unchanged ≥1024px) ───────── */
 
 .info-stack {
@@ -1747,7 +1796,7 @@ button:focus-visible {
     gap: 8px;
   }
 
-  .control-row--extended {
+  .control-row--tools {
     display: none;
     flex-wrap: wrap;
     gap: 8px;
@@ -1755,8 +1804,13 @@ button:focus-visible {
     border-top: 1px solid var(--hairline);
   }
 
-  .app[data-controls-open='true'] .control-row--extended {
+  .app[data-controls-open='true'] .control-row--tools {
     display: flex;
+  }
+
+  .control-row--playback {
+    border-right: none;
+    padding-right: 0;
   }
 
   .app {
@@ -1899,7 +1953,7 @@ button:focus-visible {
     height: 40px;
   }
 
-  .control-row--extended .style-picker {
+  .control-row--tools .style-picker {
     flex: 1 1 100%;
     display: flex;
     flex-wrap: nowrap;
@@ -1914,11 +1968,11 @@ button:focus-visible {
     scrollbar-width: none;
   }
 
-  .control-row--extended .style-picker::-webkit-scrollbar {
+  .control-row--tools .style-picker::-webkit-scrollbar {
     display: none;
   }
 
-  .control-row--extended .style-picker .style-btn {
+  .control-row--tools .style-picker .style-btn {
     flex: 0 0 auto;
     scroll-snap-align: center;
   }
