@@ -61,8 +61,10 @@ function fileBaseName(filePath) {
  * File name labels beside highlighted nodes while the node inspector is open.
  */
 export function drawInspectNodeLabels(ctx, frame, palette, style, clusterColorForFn) {
-  const { selectedPath, focusSet, dimOthers, nodes, w, h } = frame;
-  if (!selectedPath || !dimOthers || !focusSet?.size || !nodes?.length) return;
+  const { selectedPath, selectedCluster, focusSet, dimOthers, nodes, w, h } = frame;
+  if ((!selectedPath && !selectedCluster) || !dimOthers || !focusSet?.size || !nodes?.length) {
+    return;
+  }
 
   const fontSize = style === 'minimal' ? 10 : 11;
   const canvasCx = w / 2;

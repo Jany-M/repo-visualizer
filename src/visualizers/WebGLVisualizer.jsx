@@ -36,8 +36,11 @@ void main() {
   vec2 c = gl_PointCoord - 0.5;
   float d = length(c);
   if (d > 0.5) discard;
-  float a = smoothstep(0.5, 0.1, d);
-  outColor = vec4(v_color, a * 0.85);
+  float core = smoothstep(0.14, 0.0, d);
+  float corona = smoothstep(0.5, 0.06, d) * 0.32;
+  float a = core * 0.95 + corona * (1.0 - core * 0.7);
+  vec3 col = mix(v_color, vec3(1.0), core * 0.9);
+  outColor = vec4(col, a);
 }`;
 
 function compile(gl, type, src) {
@@ -163,7 +166,13 @@ export default function WebGLVisualizer({
 
     const onPointerDown = (ev) => {
       if (ev.button !== 0) return;
-      dragRef.current = { x: ev.clientX, y: ev.clientY, panning: true };
+      dragRef.current = {
+        startX: ev.clientX,
+        startY: ev.clientY,
+        x: ev.clientX,
+        y: ev.clientY,
+        panning: true,
+      };
     };
 
     const onPointerMove = (ev) => {
@@ -175,7 +184,10 @@ export default function WebGLVisualizer({
 
     const onPointerUp = (ev) => {
       if (!dragRef.current) return;
-      const moved = Math.hypot(ev.clientX - dragRef.current.x, ev.clientY - dragRef.current.y);
+      const moved = Math.hypot(
+        ev.clientX - dragRef.current.startX,
+        ev.clientY - dragRef.current.startY,
+      );
       const p = propsRef.current;
       if (dragRef.current.panning && moved < 4 && p.onNodeClick) {
         const rect = canvas.getBoundingClientRect();
@@ -202,6 +214,7 @@ export default function WebGLVisualizer({
     window.addEventListener('pointerup', onPointerUp);
 
     let last = performance.now();
+    let lastSyncKey = '';
     function frame(now) {
       const dt = now - last;
       last = now;
@@ -209,16 +222,49 @@ export default function WebGLVisualizer({
       const h = host.clientHeight;
       const p = propsRef.current;
 
-      layout.sync(p.state, p.commitIndex, { excludePatterns: p.excludePatterns });
-      layout.tick();
+      const syncKey = `${p.commitIndex}|${p.state?.commitIndex ?? -1}|${p.excludePatterns?.join('\0') ?? ''}`;
+      if (syncKey !== lastSyncKey) {
+        layout.sync(p.state, p.commitIndex, {
+          forceRestart: p.commitIndex === 0,
+          excludePatterns: p.excludePatterns,
+        });
+        lastSyncKey = syncKey;
+      }
+
+      const hasFocus = !!(p.selectedPath || p.selectedCluster);
+      const focusKey = `${p.selectedPath ?? ''}|${p.selectedCluster ?? ''}|${p.commitIndex}`;
+      if (!hasFocus && layout.getAlpha() > 0.0008) layout.tick();
 
       if (p.autoFit && !camera.userAdjusted) {
-        const pts = layout.getNodes().filter((n) => isNodeVisible(n, p.commitIndex));
-        fitBounds(camera, pts, w, h);
-        if (pts.length > 0 && !camera._fitted) {
-          snapCamera(camera);
-          camera._fitted = true;
+        const allPts = layout.getNodes().filter((n) => isNodeVisible(n, p.commitIndex));
+        let fitPts = allPts;
+        if (hasFocus && p.state) {
+          const focusSet = resolveFocusSet(
+            p.state,
+            p.commitIndex,
+            p.selectedPath,
+            p.selectedCluster,
+            p.excludePatterns,
+          );
+          if (focusSet.size > 0) {
+            fitPts = allPts.filter((n) => focusSet.has(n.path));
+          }
         }
+        if (fitPts.length > 0) {
+          const refit = !hasFocus || focusKey !== camera._focusFitKey;
+          if (refit) {
+            fitBounds(camera, fitPts, w, h);
+            if (!hasFocus) {
+              if (!camera._fitted) snapCamera(camera);
+              camera._fitted = true;
+            } else {
+              snapCamera(camera);
+              camera._focusFitKey = focusKey;
+            }
+          }
+        }
+      } else if (!hasFocus) {
+        camera._focusFitKey = null;
       }
       lerpCamera(camera, dt);
 
@@ -239,7 +285,7 @@ export default function WebGLVisualizer({
         positions[i * 2] = n.x;
         positions[i * 2 + 1] = n.y;
         let [r, g, b] = hueToRgb(p.palette, n.dir);
-        let size = Math.max(4, n.r * 2);
+        let size = Math.max(6, n.r * 3.4);
         if (dimOthers) {
           if (!focusSet.has(n.path)) {
             r *= 0.15;
@@ -293,6 +339,7 @@ export default function WebGLVisualizer({
         nodes,
         clusters: layout.getClusterCenters(),
         selectedPath: p.selectedPath,
+        selectedCluster: p.selectedCluster,
         focusSet,
         dimOthers,
         excludePatterns: p.excludePatterns,
@@ -303,6 +350,7 @@ export default function WebGLVisualizer({
         nodes,
         clusters: layout.getClusterCenters(),
         selectedPath: p.selectedPath,
+        selectedCluster: p.selectedCluster,
         focusSet,
         dimOthers,
         excludePatterns: p.excludePatterns,

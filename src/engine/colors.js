@@ -43,11 +43,13 @@ export function clusterColor(hue, style, variant = 0) {
   switch (style) {
     case 'galaxy':
       return {
-        core:   hslCss(hue, 95 + sat, 78 + light, 1),
-        glow:   hslCss(hue, 90 + sat, 65 + light, 0.55),
-        glowFar:hslCss(hue, 90 + sat, 55 + light, 0.18),
-        edge:   hslCss(hue, 80 + sat, 70 + light, 0.34),
-        ripple: hslCss(hue, 90 + sat, 75 + light, 0.85),
+        core:   hslCss(hue, 70 + sat, 96 + light, 1),
+        swatch: hslCss(hue, 68 + sat, 48 + light, 1),
+        disk:   hslCss(hue, 55 + sat, 52 + light, 0.42),
+        glow:   hslCss(hue, 80 + sat, 72 + light, 0.2),
+        glowFar:hslCss(hue, 75 + sat, 62 + light, 0.05),
+        edge:   hslCss(hue, 75 + sat, 75 + light, 0.2),
+        ripple: hslCss(hue, 85 + sat, 82 + light, 0.75),
       };
     case 'organic':
       return {
@@ -60,8 +62,8 @@ export function clusterColor(hue, style, variant = 0) {
     case 'neural':
       return {
         core:   hslCss(hue, 100, 68 + light, 1),
-        glow:   hslCss(hue, 95 + sat, 55 + light, 0.55),
-        glowFar:hslCss(hue, 90 + sat, 45 + light, 0.18),
+        glow:   hslCss(hue, 95 + sat, 55 + light, 0.22),
+        glowFar:hslCss(hue, 90 + sat, 45 + light, 0.06),
         edge:   hslCss(hue, 100, 58 + light, 0.55),
         ripple: hslCss(hue, 100, 72 + light, 0.85),
       };

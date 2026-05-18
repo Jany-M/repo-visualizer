@@ -14,7 +14,8 @@ import {
  * radiating outward, and connective tissue between feature areas.
  */
 export default function OrganicVisualizer({
-  state, commitIndex, palette, autoFit, selectedPath, onNodeClick, cameraApiRef,
+  state, commitIndex, palette, autoFit, selectedPath, selectedCluster,
+  excludePatterns, onNodeClick, cameraApiRef, recordingOverlay,
 }) {
   const hostRef = useRef(null);
 
@@ -26,7 +27,8 @@ export default function OrganicVisualizer({
   ], []);
 
   useVisualizerCore({
-    hostRef, state, commitIndex, autoFit, selectedPath, onNodeClick, cameraApiRef,
+    hostRef, state, commitIndex, autoFit, selectedPath, selectedCluster,
+    excludePatterns, onNodeClick, cameraApiRef, recordingOverlay,
     clearStrategy: 'trail',
     trailAlpha: 0.38,
     background: '#020a10',

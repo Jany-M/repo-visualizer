@@ -15,12 +15,14 @@ import {
  * High-contrast, tech-forward, dashboard-grade aesthetic.
  */
 export default function NeuralVisualizer({
-  state, commitIndex, palette, autoFit, selectedPath, onNodeClick, cameraApiRef,
+  state, commitIndex, palette, autoFit, selectedPath, selectedCluster,
+  excludePatterns, onNodeClick, cameraApiRef, recordingOverlay,
 }) {
   const hostRef = useRef(null);
 
   useVisualizerCore({
-    hostRef, state, commitIndex, autoFit, selectedPath, onNodeClick, cameraApiRef,
+    hostRef, state, commitIndex, autoFit, selectedPath, selectedCluster,
+    excludePatterns, onNodeClick, cameraApiRef, recordingOverlay,
     clearStrategy: 'full',
     background: '#04060c',
     draw: (ctx, frame) => drawNeural(ctx, frame, { palette }),
@@ -57,7 +59,7 @@ function drawNeural(ctx, frame, { palette }) {
     const gy = Math.round(n.y / step) * step;
     const dist = Math.hypot(n.x - gx, n.y - gy);
     if (dist < 24) {
-      ctx.fillStyle = 'rgba(0, 255, 234, 0.18)';
+      ctx.fillStyle = 'rgba(0, 255, 234, 0.08)';
       ctx.fillRect(gx - 2, gy - 2, 4, 4);
     }
   }
@@ -110,23 +112,25 @@ function drawNeural(ctx, frame, { palette }) {
     ctx.globalAlpha = 1;
   }
 
-  // -------- 4. Node glow --------
+  // -------- 4. Subtle node glow (keeps hex borders readable) --------
   ctx.globalCompositeOperation = 'lighter';
   for (const n of nodes) {
     if (!shouldGlow(n, frame)) continue;
-    applyNodeAlpha(ctx, n, frame);
+    const nodeA = applyNodeAlpha(ctx, n, frame);
     const c = clusterColorFor(palette, n.dir, 'neural');
     const r = nodeDrawRadius(n, frame);
-    const haloR = safeRadius(r * 4.5, r);
-    const grad = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, haloR);
+    const haloR = safeRadius(r * 2.6, r * 1.2);
+    ctx.globalAlpha = nodeA * 0.55;
+    const grad = ctx.createRadialGradient(n.x, n.y, r * 0.5, n.x, n.y, haloR);
     grad.addColorStop(0, c.glow);
-    grad.addColorStop(0.4, c.glowFar);
+    grad.addColorStop(0.5, c.glowFar);
     grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(n.x, n.y, haloR, 0, Math.PI * 2);
     ctx.fill();
   }
+  ctx.globalAlpha = 1;
 
   // -------- 5. Hex / octagon nodes --------
   ctx.globalCompositeOperation = 'source-over';
@@ -183,8 +187,8 @@ function drawNeural(ctx, frame, { palette }) {
 
 function drawHex(ctx, cx, cy, r, c) {
   ctx.fillStyle = c.core;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.lineWidth = 1.35;
   ctx.beginPath();
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2 - Math.PI / 2;

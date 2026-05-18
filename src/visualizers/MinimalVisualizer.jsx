@@ -15,12 +15,14 @@ import {
  * Upshot piece — quiet, considered, information-dense.
  */
 export default function MinimalVisualizer({
-  state, commitIndex, palette, autoFit, selectedPath, onNodeClick, cameraApiRef,
+  state, commitIndex, palette, autoFit, selectedPath, selectedCluster,
+  excludePatterns, onNodeClick, cameraApiRef, recordingOverlay,
 }) {
   const hostRef = useRef(null);
 
   useVisualizerCore({
-    hostRef, state, commitIndex, autoFit, selectedPath, onNodeClick, cameraApiRef,
+    hostRef, state, commitIndex, autoFit, selectedPath, selectedCluster,
+    excludePatterns, onNodeClick, cameraApiRef, recordingOverlay,
     clearStrategy: 'full',
     background: '#f7f5f0',
     draw: (ctx, frame) => drawMinimal(ctx, frame, { palette }),

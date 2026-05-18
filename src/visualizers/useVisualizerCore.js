@@ -17,6 +17,7 @@ import {
 } from '../engine/camera.js';
 import { isNodeVisible, nodeOpacity } from '../engine/visibility.js';
 import { getDepsForPath, resolveFocusSet } from '../engine/graphState.js';
+import { drawRecordingOverlay } from '../engine/recordingOverlay.js';
 
 export function useVisualizerCore({
   hostRef,
@@ -27,12 +28,15 @@ export function useVisualizerCore({
   trailAlpha = 0.12,
   background = '#05060d',
   onBeforeDraw,
+  onScreenDraw,
+  onScreenOverlay,
   autoFit = true,
   selectedPath = null,
   selectedCluster = null,
   excludePatterns = [],
   onNodeClick,
   cameraApiRef,
+  recordingOverlay = null,
 }) {
   const canvasRef = useRef(null);
   const layoutRef = useRef(null);
@@ -42,12 +46,14 @@ export function useVisualizerCore({
   const stateRef = useRef(state);
   const dragRef = useRef(null);
   const paramsRef = useRef({
-    draw, onBeforeDraw, clearStrategy, trailAlpha, background,
+    draw, onBeforeDraw, onScreenDraw, onScreenOverlay, clearStrategy, trailAlpha, background,
     autoFit, selectedPath, selectedCluster, excludePatterns, onNodeClick, commitIndex,
+    recordingOverlay,
   });
   paramsRef.current = {
-    draw, onBeforeDraw, clearStrategy, trailAlpha, background,
+    draw, onBeforeDraw, onScreenDraw, onScreenOverlay, clearStrategy, trailAlpha, background,
     autoFit, selectedPath, selectedCluster, excludePatterns, onNodeClick, commitIndex,
+    recordingOverlay,
   };
   stateRef.current = state;
 
@@ -126,7 +132,13 @@ export function useVisualizerCore({
 
     const onPointerDown = (ev) => {
       if (ev.button !== 0) return;
-      dragRef.current = { x: ev.clientX, y: ev.clientY, panning: true };
+      dragRef.current = {
+        startX: ev.clientX,
+        startY: ev.clientY,
+        x: ev.clientX,
+        y: ev.clientY,
+        panning: true,
+      };
       canvas.style.cursor = 'grabbing';
     };
 
@@ -141,7 +153,10 @@ export function useVisualizerCore({
 
     const onPointerUp = (ev) => {
       if (!dragRef.current) return;
-      const moved = Math.hypot(ev.clientX - dragRef.current.x, ev.clientY - dragRef.current.y);
+      const moved = Math.hypot(
+        ev.clientX - dragRef.current.startX,
+        ev.clientY - dragRef.current.startY,
+      );
       if (dragRef.current.panning && moved < 4 && paramsRef.current.onNodeClick) {
         const rect = canvas.getBoundingClientRect();
         const sx = ev.clientX - rect.left;
@@ -181,13 +196,39 @@ export function useVisualizerCore({
       const p = paramsRef.current;
       const cam = cameraRef.current;
 
+      const hasFocus = !!(p.selectedPath || p.selectedCluster);
+      const focusKey = `${p.selectedPath ?? ''}|${p.selectedCluster ?? ''}|${p.commitIndex}`;
+
       if (p.autoFit && !cam.userAdjusted) {
-        const pts = layout.getNodes().filter((n) => isNodeVisible(n, p.commitIndex));
-        fitBounds(cam, pts, w, h);
-        if (pts.length > 0 && !cam._fitted) {
-          snapCamera(cam);
-          cam._fitted = true;
+        const allPts = layout.getNodes().filter((n) => isNodeVisible(n, p.commitIndex));
+        let fitPts = allPts;
+        if (hasFocus && stateRef.current) {
+          const focusSet = resolveFocusSet(
+            stateRef.current,
+            p.commitIndex,
+            p.selectedPath,
+            p.selectedCluster,
+            p.excludePatterns,
+          );
+          if (focusSet.size > 0) {
+            fitPts = allPts.filter((n) => focusSet.has(n.path));
+          }
         }
+        if (fitPts.length > 0) {
+          const refit = !hasFocus || focusKey !== cam._focusFitKey;
+          if (refit) {
+            fitBounds(cam, fitPts, w, h);
+            if (!hasFocus) {
+              if (!cam._fitted) snapCamera(cam);
+              cam._fitted = true;
+            } else {
+              snapCamera(cam);
+              cam._focusFitKey = focusKey;
+            }
+          }
+        }
+      } else if (!hasFocus) {
+        cam._focusFitKey = null;
       }
       lerpCamera(cam, dt);
 
@@ -202,7 +243,9 @@ export function useVisualizerCore({
         ctx.fillRect(0, 0, w, h);
       }
 
-      layout.tick();
+      if (p.onScreenDraw) p.onScreenDraw(ctx, { w, h, dt, now });
+
+      if (!hasFocus && layout.getAlpha() > 0.0008) layout.tick();
 
       const ripples = ripplesRef.current;
       const nowMs = now;
@@ -256,6 +299,7 @@ export function useVisualizerCore({
         state: stateRef.current,
         commitIndex: idx,
         selectedPath: p.selectedPath,
+        selectedCluster: p.selectedCluster,
         focusSet,
         nodeOpacity: (n) => nodeOpacity(n, idx),
         dimOthers: focusSet.size > 0,
@@ -263,6 +307,13 @@ export function useVisualizerCore({
       });
 
       ctx.restore();
+
+      if (p.onScreenOverlay) p.onScreenOverlay(ctx, { w, h, dt, now });
+
+      if (p.recordingOverlay) {
+        drawRecordingOverlay(ctx, { w, h, dpr }, p.recordingOverlay, p.background);
+      }
+
       raf = requestAnimationFrame(frameLoop);
     }
     raf = requestAnimationFrame(frameLoop);
