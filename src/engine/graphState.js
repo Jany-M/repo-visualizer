@@ -19,6 +19,7 @@ export function emptyState() {
     commitIndex: -1,
     lastCommit: null,
     undoByCommit: new Map(),
+    _revertFloor: -1, // lowest commitIndex reachable via incremental revert
   };
 }
 
@@ -259,6 +260,43 @@ export function rebuildToCommit(commits, targetIdx, excludePatterns = []) {
   return state;
 }
 
+/**
+ * Deep-clone graph state for caching. Omits undoByCommit (too large; not
+ * needed when using the snapshot as a forward-only starting point).
+ */
+export function cloneStateForCache(state) {
+  const nodes = new Map();
+  for (const [k, v] of state.nodes) {
+    nodes.set(k, {
+      path: v.path, dir: v.dir, ext: v.ext,
+      size: v.size, churn: v.churn, commits: v.commits,
+      bornAt: v.bornAt, lastTouchedAt: v.lastTouchedAt, deleted: v.deleted,
+      touchCommits: v.touchCommits ? [...v.touchCommits] : [],
+    });
+  }
+  const edges = new Map();
+  for (const [k, v] of state.edges) {
+    edges.set(k, { from: v.from, to: v.to, weight: v.weight, bornAt: v.bornAt });
+  }
+  const edgesByFrom = new Map();
+  for (const [k, v] of state.edgesByFrom) {
+    edgesByFrom.set(k, new Set(v));
+  }
+  return {
+    nodes,
+    edges,
+    edgesByFrom,
+    cluster: new Map(state.cluster),
+    clusters: new Set(state.clusters),
+    commitIndex: state.commitIndex,
+    lastCommit: state.lastCommit,
+    undoByCommit: new Map(),
+    // States built by applying commits on top of this clone can only be
+    // incrementally reverted back to this commit index (no undo records before it).
+    _revertFloor: state.commitIndex,
+  };
+}
+
 /** Chunk size for async rebuild — smaller chunks on very long histories. */
 export function pickRebuildChunkSize(commitCount) {
   if (commitCount <= 80) return commitCount;
@@ -278,18 +316,21 @@ export async function rebuildToCommitAsync(
   {
     onProgress,
     shouldCancel,
-    chunkSize = pickRebuildChunkSize(targetIdx + 1),
+    startState = null,
+    startIdx = -1,
+    chunkSize = pickRebuildChunkSize(targetIdx - Math.max(-1, startIdx)),
     yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0)),
   } = {},
 ) {
-  const state = emptyState();
+  const state = startState ? cloneStateForCache(startState) : emptyState();
   if (targetIdx < 0) {
     onProgress?.(1);
     return state;
   }
 
-  const total = targetIdx + 1;
-  let done = 0;
+  const firstCommit = Math.max(0, startIdx + 1);
+  const total = Math.max(1, targetIdx - startIdx);
+  let done = firstCommit;
 
   while (done <= targetIdx) {
     if (shouldCancel?.()) return null;
@@ -299,7 +340,7 @@ export async function rebuildToCommitAsync(
       applyCommit(state, commits[i], i, excludePatterns);
     }
     done = end + 1;
-    onProgress?.(done / total);
+    onProgress?.((done - firstCommit) / total);
     if (done <= targetIdx) await yieldToMain();
   }
 

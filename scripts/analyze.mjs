@@ -52,34 +52,22 @@ const outPath = path.resolve(
 // ---------- Helpers --------------------------------------------------------
 
 /**
- * Returns a map of { filePath: 'D' | 'A' | 'M' | 'R' } for a commit by running
- * `git diff --name-status <hash>^!`. For renames (R), the OLD path is mapped to
- * 'D' and the NEW path to 'A', matching the diffSummary file list.
+ * Returns a map of { filePath: 'D' | 'A' | 'M' } for a commit using the
+ * reliable two-tree form `git diff --name-status --no-renames PARENT CHILD`.
+ * --no-renames means renames always appear as 'D' on the old path and 'A' on
+ * the new path — no combined rename notation, no R/C entries.
  */
-async function getNameStatusMap(git, hash) {
+async function getNameStatusMap(git, hash, parentHash) {
   const map = {};
   try {
-    const raw = await git
-      .raw(['diff', '--name-status', `${hash}^!`])
-      .catch(() =>
-        git.raw([
-          'diff',
-          '--name-status',
-          '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
-          hash,
-        ]),
-      );
+    const raw = await git.raw([
+      'diff', '--name-status', '--no-renames',
+      parentHash, hash,
+    ]);
     for (const line of raw.split('\n')) {
       const parts = line.trim().split('\t');
       if (parts.length < 2 || !parts[0]) continue;
-      const st = parts[0];
-      if (st.startsWith('R') || st.startsWith('C')) {
-        // Rename / Copy: old_path is gone, new_path is added
-        if (parts[1]) map[parts[1]] = 'D';
-        if (parts[2]) map[parts[2]] = 'A';
-      } else {
-        if (parts[1]) map[parts[1]] = st[0]; // D, A, M, T, U
-      }
+      if (parts[1]) map[parts[1]] = parts[0][0]; // D, A, M, T, U
     }
   } catch {
     // Silently fall back — status will be treated as 'M' for all files.
@@ -125,6 +113,27 @@ async function analyze() {
     if (first > last) commits = [...commits].reverse();
   }
 
+  // Build a map of commit hash → first parent hash so we can always use the
+  // reliable two-tree form `git diff PARENT CHILD` instead of `CHILD^!`.
+  // On Windows (and some git configurations), `HASH^!` for a root commit does
+  // NOT throw but silently diffs against the working tree, producing hundreds
+  // of spurious file changes that poison the first commit's change list.
+  const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+  const parentMap = new Map(); // childHash → parentHash (or EMPTY_TREE for roots)
+  {
+    const rawParents = await git.raw([
+      'log', '--format=%H %P',
+      ...(maxCommits ? ['-n', String(maxCommits)] : []),
+    ]);
+    for (const line of rawParents.split('\n')) {
+      const parts = line.trim().split(' ');
+      if (parts.length < 1 || !parts[0]) continue;
+      const child = parts[0];
+      const parent = parts[1] || EMPTY_TREE; // empty = root commit
+      parentMap.set(child, parent);
+    }
+  }
+
   console.log(`→ Found ${commits.length} commits. Walking history...`);
 
   const allPaths = new Set();
@@ -150,14 +159,21 @@ async function analyze() {
     try {
       [diffSummary, nameStatusMap] = await Promise.all([
         git
-          .diffSummary([`${commit.hash}^!`])
-          .catch(() =>
-            git.diffSummary([
-              '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
-              commit.hash,
-            ]),
-          ),
-        getNameStatusMap(git, commit.hash),
+          // --no-renames prevents git from emitting combined diff paths like
+          // "src/{Old => New}/file.css". Without this, renamed directories
+          // produce paths that (a) can't be resolved via git.show and (b)
+          // create ghost nodes that persist indefinitely in the graph for
+          // file types with no import parser (CSS, images, binary, etc.).
+          // With --no-renames the old path appears as a plain 'D' entry and
+          // the new path as a plain 'A' entry, which our pipeline handles
+          // correctly via nameStatusMap.
+          //
+          // We always use the explicit PARENT..CHILD two-tree form rather than
+          // HASH^! because on Windows, HASH^! for a root commit (no parent)
+          // silently diffs against the working tree instead of throwing, which
+          // injects hundreds of spurious file changes into the first commit.
+          .diffSummary([parentMap.get(commit.hash) ?? EMPTY_TREE, commit.hash, '--no-renames']),
+        getNameStatusMap(git, commit.hash, parentMap.get(commit.hash) ?? EMPTY_TREE),
       ]);
     } catch {
       continue;
@@ -194,6 +210,33 @@ async function analyze() {
       }
 
       changes.push(change);
+    }
+
+    // Safety-net: emit explicit entries for any paths in nameStatusMap that
+    // weren't already covered by diffSummary (possible edge cases: zero-byte
+    // files, binary renames on some git versions, etc.).
+    //   'D' → deletion that diffSummary missed → mark node deleted in the graph
+    //   'A' → addition that diffSummary missed → add node (with import parse attempt)
+    const processedPaths = new Set(changes.map((c) => c.path));
+    for (const [p, st] of Object.entries(nameStatusMap)) {
+      if (processedPaths.has(p) || !shouldIncludeFile(p)) continue;
+      if (st === 'D') {
+        changes.push({ path: p, added: 0, removed: 0, binary: false, status: 'D' });
+      } else if (st === 'A') {
+        allPaths.add(p);
+        const ext = path.extname(p).toLowerCase();
+        const parser = PARSERS[ext];
+        const change = { path: p, added: 0, removed: 0, binary: false, status: 'M' };
+        if (parser) {
+          try {
+            const content = await git.show([`${commit.hash}:${p}`]);
+            change.imports = parser(content);
+          } catch {
+            change.status = 'D';
+          }
+        }
+        changes.push(change);
+      }
     }
 
     out.commits.push({

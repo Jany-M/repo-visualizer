@@ -471,6 +471,7 @@ export default function App() {
           excludePatterns={excludePatterns}
           selectedCluster={selectedCluster}
           onClusterSelect={handleClusterSelect}
+          onSelectPath={handleNodeClick}
         />
       </div>
 

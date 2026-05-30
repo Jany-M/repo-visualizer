@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  applyCommit, emptyState, rebuildToCommitAsync, revertCommit,
+  applyCommit, cloneStateForCache, emptyState, rebuildToCommitAsync, revertCommit,
 } from './graphState.js';
 
 const SPEEDS = {
@@ -17,6 +17,9 @@ const SPEEDS = {
 };
 
 const INCREMENTAL_SEEK_MAX = 40;
+// Maximum number of timeline positions to keep in the in-memory seek cache.
+// The cache is keyed by commit index and destroyed when the page closes.
+const MAX_SEEK_CACHE = 50;
 
 /** Stable fallback so effect deps do not change every render while dataset is loading. */
 const EMPTY_LIST = Object.freeze([]);
@@ -52,6 +55,10 @@ export function useTimeline(dataset) {
   const onAdvanceListeners = useRef(new Set());
   const buildCancelRef = useRef(false);
   const seekGenRef = useRef(0);
+  // In-memory cache of graph states at previously-computed commit indices.
+  // Allows seeking to already-visited timeline positions without a full rebuild.
+  // Entries are never written to disk — automatically destroyed on page close.
+  const snapshotCache = useRef(new Map());
 
   const bumpState = useCallback(() => setStateVersion((v) => v + 1), []);
 
@@ -64,6 +71,7 @@ export function useTimeline(dataset) {
     cancelBuild();
     seekGenRef.current++;
     stateRef.current = emptyState();
+    snapshotCache.current.clear();
     setIndex(-1);
     setPlaying(false);
     setBuildingFinal(false);
@@ -115,33 +123,56 @@ export function useTimeline(dataset) {
   }, [playing, play, pause]);
 
   const seek = useCallback(async (targetIdx) => {
-    const gen = ++seekGenRef.current; // invalidates any prior async seek
-    cancelBuild();                     // cancels any goToFinal in progress
     const list = commitsRef.current;
     const clamped = Math.max(-1, Math.min(list.length - 1, targetIdx));
-    const current = index;
+    // Read from the mutable ref so double-fires (mousedown + mouseup both calling
+    // seek before React re-renders) see the already-updated position and bail out
+    // early, preventing double-application of commits on the sync path.
+    const current = stateRef.current.commitIndex;
 
     if (clamped === current) return;
 
+    const gen = ++seekGenRef.current; // invalidates any prior async seek
+    cancelBuild();                     // cancels any goToFinal in progress
+
     const delta = clamped - current;
 
-    if (Math.abs(delta) <= INCREMENTAL_SEEK_MAX) {
-      // Small jump — synchronous, always instant.
-      if (delta > 0) {
-        for (let i = current + 1; i <= clamped; i++) {
-          applyCommit(stateRef.current, list[i], i, excludeRef.current);
-        }
-      } else {
-        for (let i = current; i > clamped; i--) {
-          revertCommit(stateRef.current, list[i], i, excludeRef.current);
-        }
+    // _revertFloor is the lowest commitIndex reachable via incremental revert on
+    // this state object.  States built from a cache clone have a floor equal to
+    // the cache point's commitIndex; states built from scratch have floor = -1.
+    const revertFloor = stateRef.current._revertFloor ?? -1;
+
+    if (delta > 0 && delta <= INCREMENTAL_SEEK_MAX) {
+      // Small forward jump — apply directly on current state.
+      for (let i = current + 1; i <= clamped; i++) {
+        applyCommit(stateRef.current, list[i], i, excludeRef.current);
+      }
+      stateRef.current.lastCommit = clamped >= 0 ? list[clamped] : null;
+      setIndex(clamped);
+      bumpState();
+      onAdvanceListeners.current.forEach((cb) => cb(clamped, stateRef.current));
+    } else if (delta < 0 && -delta <= INCREMENTAL_SEEK_MAX && clamped >= revertFloor) {
+      // Small backward revert — safe because undo records exist down to revertFloor.
+      for (let i = current; i > clamped; i--) {
+        revertCommit(stateRef.current, list[i], i, excludeRef.current);
       }
       stateRef.current.lastCommit = clamped >= 0 ? list[clamped] : null;
       setIndex(clamped);
       bumpState();
       onAdvanceListeners.current.forEach((cb) => cb(clamped, stateRef.current));
     } else {
-      // Large jump — async chunked rebuild so the browser stays responsive.
+      // Large jump, or backward jump that would cross the revert floor —
+      // async chunked rebuild from the nearest cached checkpoint (if any).
+      let cacheHit = null;
+      for (const [idx, s] of snapshotCache.current) {
+        if (idx <= clamped && (!cacheHit || idx > cacheHit.idx)) {
+          cacheHit = { idx, state: s };
+        }
+      }
+      const stepsFromCache = cacheHit ? clamped - cacheHit.idx : Infinity;
+      const stepsFromScratch = clamped + 1; // rebuild commits 0..clamped
+      const useCacheStart = cacheHit && stepsFromCache < stepsFromScratch;
+
       setSeeking(true);
       setSeekProgress(0);
       try {
@@ -150,6 +181,8 @@ export function useTimeline(dataset) {
           clamped,
           excludeRef.current,
           {
+            startState: useCacheStart ? cacheHit.state : null,
+            startIdx: useCacheStart ? cacheHit.idx : -1,
             onProgress: (p) => { if (seekGenRef.current === gen) setSeekProgress(p); },
             shouldCancel: () => seekGenRef.current !== gen,
             yieldToMain,
@@ -161,12 +194,17 @@ export function useTimeline(dataset) {
           setIndex(clamped);
           bumpState();
           onAdvanceListeners.current.forEach((cb) => cb(clamped, stateRef.current));
+          // Cache result so future seeks to this area are instant or near-instant.
+          if (snapshotCache.current.size >= MAX_SEEK_CACHE) {
+            snapshotCache.current.delete(snapshotCache.current.keys().next().value);
+          }
+          snapshotCache.current.set(clamped, cloneStateForCache(built));
         }
       } finally {
         if (seekGenRef.current === gen) setSeeking(false);
       }
     }
-  }, [index, bumpState, cancelBuild]);
+  }, [bumpState, cancelBuild]);
 
   const restart = useCallback(() => {
     cancelBuild();
@@ -210,6 +248,11 @@ export function useTimeline(dataset) {
         setIndex(target);
         bumpState();
         onAdvanceListeners.current.forEach((cb) => cb(target, stateRef.current));
+        // Cache final state so scrubbing back to it later is instant.
+        if (snapshotCache.current.size >= MAX_SEEK_CACHE) {
+          snapshotCache.current.delete(snapshotCache.current.keys().next().value);
+        }
+        snapshotCache.current.set(target, cloneStateForCache(built));
       }
     } finally {
       setBuildingFinal(false);

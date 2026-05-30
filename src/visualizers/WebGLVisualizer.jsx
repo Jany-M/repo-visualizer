@@ -21,27 +21,39 @@ in vec3 a_color;
 uniform vec2 u_resolution;
 uniform vec3 u_camera;
 out vec3 v_color;
+out float v_size;
 void main() {
   vec2 p = (a_pos * u_camera.z + u_camera.xy) / u_resolution * 2.0 - 1.0;
   p.y *= -1.0;
-  gl_Position = vec4(p, 0, 1);
   gl_PointSize = a_size * u_camera.z;
+  gl_Position = vec4(p, 0, 1);
   v_color = a_color;
+  v_size = gl_PointSize;
 }`;
 
 const FS = `#version 300 es
 precision mediump float;
 in vec3 v_color;
+in float v_size;
 out vec4 outColor;
 void main() {
   vec2 c = gl_PointCoord - 0.5;
   float d = length(c);
   if (d > 0.5) discard;
-  float core = smoothstep(0.14, 0.0, d);
-  float corona = smoothstep(0.5, 0.06, d) * 0.32;
-  float a = core * 0.95 + corona * (1.0 - core * 0.7);
-  vec3 col = mix(v_color, vec3(1.0), core * 0.9);
-  outColor = vec4(col, a);
+  // t=0: soft galaxy glow (small/zoomed-out); t=1: crisp filled circle (zoomed-in)
+  float t = clamp((v_size - 10.0) / 16.0, 0.0, 1.0);
+  // Galaxy dot style
+  float gc = smoothstep(0.14, 0.0, d);
+  float gco = smoothstep(0.5, 0.06, d) * 0.32;
+  float ga = gc * 0.95 + gco * (1.0 - gc * 0.7);
+  vec3 gcol = mix(v_color, vec3(1.0), gc * 0.9);
+  // Crisp filled circle: ~2px AA ring + subtle centre highlight
+  float aa = 2.0 / max(v_size, 2.0);
+  float cc = smoothstep(0.5, 0.5 - aa, d);
+  float ci = smoothstep(0.22, 0.0, d) * 0.22;
+  float ca = cc * 0.92 + ci * (1.0 - cc);
+  vec3 ccol = mix(v_color, vec3(1.0), ci * 1.2);
+  outColor = vec4(mix(gcol, ccol, t), mix(ga, ca, t));
 }`;
 
 function compile(gl, type, src) {

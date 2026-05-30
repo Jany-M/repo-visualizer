@@ -230,8 +230,11 @@ function drawGalaxyStarNode(ctx, n, frame, palette, commitIndex, now) {
 
   ctx.globalCompositeOperation = 'lighter';
 
-  // Transparent atmospheric corona (always present; stronger on birth)
-  const coronaR = safeRadius(baseR * (5.5 + birth * 3), baseR * 2.5);
+  // Transparent atmospheric corona (always present; stronger on birth).
+  // Cap in screen space so the glow doesn't dominate when zoomed in.
+  const cameraScale = frame.cameraScale ?? 1;
+  const rawCorona = baseR * (5.5 + birth * 3);
+  const coronaR = safeRadius(Math.min(rawCorona, 40 / cameraScale), baseR * 0.5);
   ctx.globalAlpha = nodeA * (0.07 + birth * 0.14) * twinkle;
   const corona = ctx.createRadialGradient(n.x, n.y, baseR * 0.15, n.x, n.y, coronaR);
   corona.addColorStop(0, 'rgba(0, 0, 0, 0)');

@@ -250,6 +250,7 @@ export function useVisualizerCore({
         focusSet,
         nodeOpacity: (n) => nodeOpacity(n, idx),
         dimOthers: focusSet.size > 0,
+        cameraScale: cam.scale,
         excludePatterns: p.excludePatterns,
       });
 

@@ -3,7 +3,7 @@
  */
 
 const MIN_SCALE = 0.15;
-const MAX_SCALE = 4;
+const MAX_SCALE = 8;
 const DEFAULT_PADDING = 80;
 
 export function createCamera() {
