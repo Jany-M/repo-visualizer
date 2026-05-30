@@ -393,6 +393,23 @@ export default function App() {
             </div>
           </div>
         )}
+        {timeline.seeking && (
+          <div className="final-state-loader" role="status" aria-live="polite">
+            <div className="final-state-loader-card">
+              <div className="final-state-loader-title">Seeking…</div>
+              <div className="final-state-loader-track">
+                <div
+                  className="final-state-loader-bar"
+                  style={{ width: `${Math.round(timeline.seekProgress * 100)}%` }}
+                />
+              </div>
+              <div className="final-state-loader-meta">
+                {Math.round(timeline.seekProgress * 100)}%
+                <span className="dim"> · applying commits in batches</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {webglFailed && !bannerDismissed && (

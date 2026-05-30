@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  applyCommit, emptyState, rebuildToCommit, rebuildToCommitAsync, revertCommit,
+  applyCommit, emptyState, rebuildToCommitAsync, revertCommit,
 } from './graphState.js';
 
 const SPEEDS = {
@@ -45,10 +45,13 @@ export function useTimeline(dataset) {
   const [stateVersion, setStateVersion] = useState(0);
   const [buildingFinal, setBuildingFinal] = useState(false);
   const [buildProgress, setBuildProgress] = useState(0);
+  const [seeking, setSeeking] = useState(false);
+  const [seekProgress, setSeekProgress] = useState(0);
   const stateRef = useRef(emptyState());
   const lastAdvanceRef = useRef(0);
   const onAdvanceListeners = useRef(new Set());
   const buildCancelRef = useRef(false);
+  const seekGenRef = useRef(0);
 
   const bumpState = useCallback(() => setStateVersion((v) => v + 1), []);
 
@@ -59,11 +62,13 @@ export function useTimeline(dataset) {
   // Reset when dataset changes
   useEffect(() => {
     cancelBuild();
+    seekGenRef.current++;
     stateRef.current = emptyState();
     setIndex(-1);
     setPlaying(false);
     setBuildingFinal(false);
     setBuildProgress(0);
+    setSeeking(false);
     bumpState();
   }, [dataset?.repo, commits.length, dataset?.exclude, bumpState, cancelBuild]);
 
@@ -109,8 +114,9 @@ export function useTimeline(dataset) {
     else play();
   }, [playing, play, pause]);
 
-  const seek = useCallback((targetIdx) => {
-    cancelBuild();
+  const seek = useCallback(async (targetIdx) => {
+    const gen = ++seekGenRef.current; // invalidates any prior async seek
+    cancelBuild();                     // cancels any goToFinal in progress
     const list = commitsRef.current;
     const clamped = Math.max(-1, Math.min(list.length - 1, targetIdx));
     const current = index;
@@ -120,6 +126,7 @@ export function useTimeline(dataset) {
     const delta = clamped - current;
 
     if (Math.abs(delta) <= INCREMENTAL_SEEK_MAX) {
+      // Small jump — synchronous, always instant.
       if (delta > 0) {
         for (let i = current + 1; i <= clamped; i++) {
           applyCommit(stateRef.current, list[i], i, excludeRef.current);
@@ -129,21 +136,45 @@ export function useTimeline(dataset) {
           revertCommit(stateRef.current, list[i], i, excludeRef.current);
         }
       }
+      stateRef.current.lastCommit = clamped >= 0 ? list[clamped] : null;
+      setIndex(clamped);
+      bumpState();
+      onAdvanceListeners.current.forEach((cb) => cb(clamped, stateRef.current));
     } else {
-      stateRef.current = rebuildToCommit(list, clamped, excludeRef.current);
+      // Large jump — async chunked rebuild so the browser stays responsive.
+      setSeeking(true);
+      setSeekProgress(0);
+      try {
+        const built = await rebuildToCommitAsync(
+          list,
+          clamped,
+          excludeRef.current,
+          {
+            onProgress: (p) => { if (seekGenRef.current === gen) setSeekProgress(p); },
+            shouldCancel: () => seekGenRef.current !== gen,
+            yieldToMain,
+          },
+        );
+        if (built && seekGenRef.current === gen) {
+          built.lastCommit = clamped >= 0 ? list[clamped] : null;
+          stateRef.current = built;
+          setIndex(clamped);
+          bumpState();
+          onAdvanceListeners.current.forEach((cb) => cb(clamped, stateRef.current));
+        }
+      } finally {
+        if (seekGenRef.current === gen) setSeeking(false);
+      }
     }
-
-    stateRef.current.lastCommit = clamped >= 0 ? list[clamped] : null;
-    setIndex(clamped);
-    bumpState();
-    onAdvanceListeners.current.forEach((cb) => cb(clamped, stateRef.current));
   }, [index, bumpState, cancelBuild]);
 
   const restart = useCallback(() => {
     cancelBuild();
+    seekGenRef.current++;
     stateRef.current = emptyState();
     setIndex(-1);
     setPlaying(false);
+    setSeeking(false);
     bumpState();
   }, [bumpState, cancelBuild]);
 
@@ -155,6 +186,7 @@ export function useTimeline(dataset) {
     if (index === target) return;
 
     cancelBuild();
+    seekGenRef.current++; // cancel any in-flight seek
     buildCancelRef.current = false;
     setPlaying(false);
     setBuildingFinal(true);
@@ -218,6 +250,8 @@ export function useTimeline(dataset) {
     stateVersion,
     buildingFinal,
     buildProgress,
+    seeking,
+    seekProgress,
     atFinal,
     play,
     pause,
@@ -230,7 +264,7 @@ export function useTimeline(dataset) {
     onAdvance,
     progress: commits.length > 0 ? Math.max(0, (index + 1) / commits.length) : 0,
   }), [
-    commits, index, playing, speed, stateVersion, buildingFinal, buildProgress, atFinal,
+    commits, index, playing, speed, stateVersion, buildingFinal, buildProgress, seeking, seekProgress, atFinal,
     play, pause, toggle, seek, stepBackward, restart, goToFinal, onAdvance,
   ]);
 }
