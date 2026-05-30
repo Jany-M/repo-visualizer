@@ -138,6 +138,9 @@ export function applyCommit(state, commit, commitIdx, excludePatterns = []) {
 
     if (ch.status === 'D') {
       node.deleted = true;
+      // Remove all edges to/from this path so they don't linger in state.
+      // The removed edges are captured in undo.edges so backward seek restores them.
+      removeAllEdgesForPath(state, path, undo.edges);
     } else {
       node.deleted = false;
       const delta = (ch.added || 0) - (ch.removed || 0);
@@ -321,6 +324,8 @@ export function getDepsForPath(state, path) {
   const inbound = [];
   const outbound = [];
   for (const [, e] of state.edges) {
+    // Skip edges whose endpoints have been deleted.
+    if (state.nodes.get(e.from)?.deleted || state.nodes.get(e.to)?.deleted) continue;
     if (e.to === path) inbound.push(e);
     if (e.from === path) outbound.push(e);
   }
