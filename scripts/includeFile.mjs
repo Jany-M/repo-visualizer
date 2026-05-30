@@ -13,6 +13,8 @@ const DOC_EXTENSIONS = new Set([
   '.rst',
   '.adoc',
   '.asciidoc',
+  '.txt',
+  '.log',
 ]);
 
 const SKIP_SEGMENTS = new Set(DEFAULT_SKIP_SEGMENTS);

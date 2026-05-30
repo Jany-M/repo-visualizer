@@ -2,6 +2,8 @@
   "exclude": [
     "legacy/**",
     "docs/**",
-    "public/**"
+    "public/**",
+    ".json",
+    ".yaml"
   ]
 }
