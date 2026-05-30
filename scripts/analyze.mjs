@@ -48,6 +48,44 @@ const repoPath = positional[0] ? path.resolve(positional[0]) : repoRoot;
 const outPath = path.resolve(
   flags.out || path.join(repoRoot, 'public', 'data', 'history.json')
 );
+
+// ---------- Helpers --------------------------------------------------------
+
+/**
+ * Returns a map of { filePath: 'D' | 'A' | 'M' | 'R' } for a commit by running
+ * `git diff --name-status <hash>^!`. For renames (R), the OLD path is mapped to
+ * 'D' and the NEW path to 'A', matching the diffSummary file list.
+ */
+async function getNameStatusMap(git, hash) {
+  const map = {};
+  try {
+    const raw = await git
+      .raw(['diff', '--name-status', `${hash}^!`])
+      .catch(() =>
+        git.raw([
+          'diff',
+          '--name-status',
+          '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
+          hash,
+        ]),
+      );
+    for (const line of raw.split('\n')) {
+      const parts = line.trim().split('\t');
+      if (parts.length < 2 || !parts[0]) continue;
+      const st = parts[0];
+      if (st.startsWith('R') || st.startsWith('C')) {
+        // Rename / Copy: old_path is gone, new_path is added
+        if (parts[1]) map[parts[1]] = 'D';
+        if (parts[2]) map[parts[2]] = 'A';
+      } else {
+        if (parts[1]) map[parts[1]] = st[0]; // D, A, M, T, U
+      }
+    }
+  } catch {
+    // Silently fall back — status will be treated as 'M' for all files.
+  }
+  return map;
+}
 const maxCommits = flags.max ? parseInt(flags.max, 10) : 0; // 0 = all
 
 if (!existsSync(path.join(repoPath, '.git'))) {
@@ -66,9 +104,8 @@ console.log(`→ Import parsers: ${langSummary}`);
 console.log(`→ Built-in excludes: ${getDefaultExcludes().length} pattern(s) (deps, build output, tests, …)`);
 if (maxCommits) console.log(`→ Limiting to ${maxCommits} most recent commits`);
 if (analyzeConfig.configPath) {
-  console.log(`→ Config: ${analyzeConfig.configPath} (+${analyzeConfig.exclude.length} custom exclude pattern(s))`);
-} else if (analyzeConfig.exclude.length) {
-  console.log(`→ Config: +${analyzeConfig.exclude.length} custom exclude pattern(s) from --config`);
+  const tag = analyzeConfig.isFallback ? ' [visualizer fallback]' : '';
+  console.log(`→ Config: ${analyzeConfig.configPath}${tag} (+${analyzeConfig.exclude.length} custom exclude pattern(s))`);
 }
 
 // ---------- Main analyzer ---------------------------------------------------
@@ -109,15 +146,19 @@ async function analyze() {
     }
 
     let diffSummary;
+    let nameStatusMap;
     try {
-      diffSummary = await git.diffSummary([
-        `${commit.hash}^!`,
-      ]).catch(async () => {
-        return await git.diffSummary([
-          '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
-          commit.hash,
-        ]);
-      });
+      [diffSummary, nameStatusMap] = await Promise.all([
+        git
+          .diffSummary([`${commit.hash}^!`])
+          .catch(() =>
+            git.diffSummary([
+              '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
+              commit.hash,
+            ]),
+          ),
+        getNameStatusMap(git, commit.hash),
+      ]);
     } catch {
       continue;
     }
@@ -130,19 +171,24 @@ async function analyze() {
       const ext = path.extname(p).toLowerCase();
       const parser = PARSERS[ext];
 
+      // Use git --name-status for reliable deletion detection across all file types.
+      const isDeleted = nameStatusMap[p] === 'D';
+
       const change = {
         path: p,
         added: f.insertions ?? 0,
         removed: f.deletions ?? 0,
         binary: !!f.binary,
-        status: 'M',
+        status: isDeleted ? 'D' : 'M',
       };
 
-      if (parser && !f.binary) {
+      if (parser && !f.binary && !isDeleted) {
         try {
           const content = await git.show([`${commit.hash}:${p}`]);
           change.imports = parser(content);
         } catch {
+          // git.show failed despite name-status not flagging deletion
+          // (e.g. submodule, partial clone). Treat as deleted to be safe.
           change.status = 'D';
         }
       }
