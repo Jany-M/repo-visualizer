@@ -110,7 +110,7 @@ These are applied automatically on every analyze run — no config required (`sc
 | Deploy artifacts | `.output/`, `.vercel/`, `.netlify/` |
 | Tests & fixtures | `**/*.test.ts`, `**/*.spec.js`, `**/__fixtures__/**`, `**/__snapshots__/**` |
 | Generated / minified | `**/*.min.js`, `**/*.bundle.js`, `**/*.generated.ts` |
-| Docs (by extension) | `.md`, `.mdx`, `.rst`, `.adoc`, … |
+| Docs / text logs (by extension) | `.md`, `.mdx`, `.rst`, `.adoc`, `.txt`, `.log`, … |
 | CI templates | `.github/` (path segment) |
 
 ### Custom exclude paths
@@ -122,14 +122,22 @@ Add repo-specific patterns in `repovisualizer.config.json` in the **repository y
   "exclude": [
     "legacy/**",
     "docs/**",
-    "public/**"
+    "public/**",
+    ".json",
+    ".yaml"
   ]
 }
 ```
 
-Patterns match repo-relative paths: plain entries like `legacy` match that folder prefix; `*` matches one path segment; `**` matches any depth.
+Patterns match repo-relative paths: plain entries like `legacy` match that folder prefix; `*` matches one path segment; `**` matches any depth. Bare extensions like `.json` or `.yaml` exclude every file with that extension anywhere in the repo.
 
-The analyzer loads this automatically from the target repo root. Override the file location with:
+**Config lookup order:**
+
+1. `--config=<path>` flag — explicit path, error if not found
+2. `repovisualizer.config.json` (or `.repovisualizer.json`) in the **target repo root**
+3. Same filenames in the **repo-visualizer root** — fallback for when you want one shared config without touching the repos you analyze
+
+So if you keep a `repovisualizer.config.json` in this project's root it will be used automatically for any target repo that doesn't have its own. Override the file location explicitly with:
 
 ```bash
 npm run analyze -- /path/to/your/repo --config=/path/to/repovisualizer.config.json

@@ -1,6 +1,6 @@
 {
   "name": "repo-visualizer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "An animated, cinematic visualization of a git repository's evolution over time.",
   "type": "module",
   "scripts": {
