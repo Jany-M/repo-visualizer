@@ -66,6 +66,7 @@ export default function App() {
   const compactLayout = isCompactLayout(layoutMode);
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
+  const [hasStartedPlayback, setHasStartedPlayback] = useState(false);
   const [commitCardCollapsed, setCommitCardCollapsed] = useState(
     () => loadBool('rv-commit-card-collapsed', false),
   );
@@ -224,6 +225,10 @@ export default function App() {
     }
   }, [compactLayout, selectedPath]);
 
+  useEffect(() => {
+    if (timeline.playing) setHasStartedPlayback(true);
+  }, [timeline.playing]);
+
   const updateRecordingProgress = useCallback(() => {
     const total = timelineRef.current.commits.length;
     const idx = timelineRef.current.index;
@@ -319,6 +324,11 @@ export default function App() {
     setUseWebGL(false);
   }, []);
 
+  const handleTogglePlay = useCallback(() => {
+    if (!timeline.playing) setHasStartedPlayback(true);
+    timeline.toggle();
+  }, [timeline]);
+
   useEffect(() => {
     const onKey = (ev) => {
       if (ev.target.matches('input, select, textarea')) return;
@@ -335,7 +345,7 @@ export default function App() {
         timeline.goToFinal();
       } else if (ev.code === 'Space' && !selectedPath && !selectedCluster && !recording && !timeline.buildingFinal) {
         ev.preventDefault();
-        timeline.toggle();
+        handleTogglePlay();
       } else if (ev.code === 'ArrowRight') timeline.seek(timeline.index + 1);
       else if (ev.code === 'ArrowLeft') timeline.seek(timeline.index - 1);
       else if (ev.code === 'Digit1') setStyle('galaxy');
@@ -345,7 +355,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [timeline, selectedPath, selectedCluster, handleCloseInspector, recording, exportOpen, handleStopRecord]);
+  }, [timeline, selectedPath, selectedCluster, handleCloseInspector, recording, exportOpen, handleStopRecord, handleTogglePlay]);
 
   if (loading || !dataset) {
     return (
@@ -358,6 +368,7 @@ export default function App() {
 
   const controlsExpanded = !compactLayout || mobileControlsOpen;
   const infoExpanded = !compactLayout || mobileInfoOpen;
+  const showMobilePlayHint = compactLayout && !hasStartedPlayback;
 
   return (
     <div
@@ -411,6 +422,12 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {showMobilePlayHint && (
+        <div className="mobile-play-hint-overlay" aria-live="polite">
+          <span className="mobile-play-hint">Play the Repo</span>
+        </div>
+      )}
 
       {webglFailed && !bannerDismissed && (
         <div className="notice-banner">
@@ -494,7 +511,7 @@ export default function App() {
         playing={timeline.playing}
         speed={timeline.speed}
         speeds={timeline.speeds}
-        onTogglePlay={timeline.toggle}
+        onTogglePlay={handleTogglePlay}
         onGoToFinal={timeline.goToFinal}
         buildingFinal={timeline.buildingFinal}
         buildProgress={timeline.buildProgress}
@@ -511,6 +528,7 @@ export default function App() {
         onZoomReset={() => cameraApiRef.current?.reset()}
         perfMode={perfMode}
         onPerfModeChange={setPerfMode}
+        showPlayHint={showMobilePlayHint}
       />
     </div>
   );

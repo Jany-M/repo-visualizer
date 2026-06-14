@@ -52,6 +52,7 @@ export default function ControlBar({
   onZoomReset,
   perfMode,
   onPerfModeChange,
+  showPlayHint = false,
 }) {
   return (
     <div className="control-bar">
@@ -62,7 +63,7 @@ export default function ControlBar({
             <span className="icon"><RestartIcon /></span>
           </button>
           <button
-            className="btn btn-play"
+            className={`btn btn-play${showPlayHint ? ' is-cta' : ''}`}
             onClick={onTogglePlay}
             title={playing ? 'Pause' : 'Play'}
             type="button"
