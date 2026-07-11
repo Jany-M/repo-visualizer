@@ -56,15 +56,52 @@ function commit(message, changes) {
     authorEmail: author[1],
     message,
     stats,
-    changes: filtered.map((c) => ({
-      path: c.path,
-      added: c.added ?? Math.floor(20 + rng() * 60),
-      removed: c.removed ?? 0,
-      binary: false,
-      status: c.status || 'M',
-      resolvedImports: c.imports || [],
-    })),
+    changes: filtered.map((c) => {
+      const ch = {
+        path: c.path,
+        added: c.added ?? Math.floor(20 + rng() * 60),
+        removed: c.removed ?? 0,
+        binary: false,
+        status: c.status || 'M',
+      };
+      // Preserve previous edges when imports are omitted in synthetic commits.
+      if (Object.prototype.hasOwnProperty.call(c, 'imports')) {
+        ch.resolvedImports = c.imports || [];
+      }
+      return ch;
+    }),
   });
+}
+
+function annotateDependencyFields(dataset) {
+  const activeImports = new Map();
+
+  for (const c of dataset.commits || []) {
+    for (const ch of c.changes || []) {
+      if (ch.status === 'D') {
+        activeImports.delete(ch.path);
+        continue;
+      }
+      if (Array.isArray(ch.resolvedImports)) {
+        activeImports.set(ch.path, [...new Set(ch.resolvedImports)]);
+      }
+    }
+
+    const importedBy = new Map();
+    for (const [from, deps] of activeImports) {
+      for (const to of deps) {
+        if (!importedBy.has(to)) importedBy.set(to, []);
+        importedBy.get(to).push(from);
+      }
+    }
+
+    for (const ch of c.changes || []) {
+      ch.dependencies = [...(activeImports.get(ch.path) || [])];
+      ch.importedBy = [...new Set(importedBy.get(ch.path) || [])];
+    }
+  }
+
+  return dataset;
 }
 
 // ── Sprint 0: Project bootstrap ──────────────────────────────────────────
@@ -278,6 +315,8 @@ const out = {
   lastCommit: commits[commits.length - 1].sha,
   commits,
 };
+
+annotateDependencyFields(out);
 
 await mkdir(path.dirname(outPath), { recursive: true });
 await writeFile(outPath, JSON.stringify(out));

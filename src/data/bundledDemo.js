@@ -46,15 +46,52 @@ function mk(message, author, changes) {
     authorEmail: author.toLowerCase().replace(' ', '.') + '@example.com',
     message,
     stats,
-    changes: changes.map((c) => ({
-      path: c.p,
-      added: c.a ?? 30 + Math.floor(Math.random() * 60),
-      removed: c.r ?? 0,
-      binary: false,
-      status: c.s || 'M',
-      resolvedImports: c.i || [],
-    })),
+    changes: changes.map((c) => {
+      const ch = {
+        path: c.p,
+        added: c.a ?? 30 + Math.floor(Math.random() * 60),
+        removed: c.r ?? 0,
+        binary: false,
+        status: c.s || 'M',
+      };
+      // Only override imports when explicitly provided.
+      if (Object.prototype.hasOwnProperty.call(c, 'i')) {
+        ch.resolvedImports = c.i || [];
+      }
+      return ch;
+    }),
   };
+}
+
+function annotateDependencyFields(dataset) {
+  const activeImports = new Map();
+
+  for (const commit of dataset.commits || []) {
+    for (const ch of commit.changes || []) {
+      if (ch.status === 'D') {
+        activeImports.delete(ch.path);
+        continue;
+      }
+      if (Array.isArray(ch.resolvedImports)) {
+        activeImports.set(ch.path, [...new Set(ch.resolvedImports)]);
+      }
+    }
+
+    const importedBy = new Map();
+    for (const [from, deps] of activeImports) {
+      for (const to of deps) {
+        if (!importedBy.has(to)) importedBy.set(to, []);
+        importedBy.get(to).push(from);
+      }
+    }
+
+    for (const ch of commit.changes || []) {
+      ch.dependencies = [...(activeImports.get(ch.path) || [])];
+      ch.importedBy = [...new Set(importedBy.get(ch.path) || [])];
+    }
+  }
+
+  return dataset;
 }
 
 function buildDataset() {
@@ -261,7 +298,7 @@ function buildDataset() {
     { p: 'src/web/pages/Admin.tsx', a: 150, s: 'A', i: ['src/web/components/index.ts', 'src/web/api-client.ts'] },
     { p: 'src/web/router.tsx', a: 4, r: 1, i: ['src/web/pages/Dashboard.tsx', 'src/web/pages/Billing.tsx', 'src/web/forms/SignupForm.tsx', 'src/web/forms/LoginForm.tsx', 'src/web/pages/Admin.tsx'] },
   ]));
-  return {
+  return annotateDependencyFields({
     repo: 'demo-saas',
     generatedAt: new Date().toISOString(),
     totalCommits: c.length,
@@ -269,7 +306,7 @@ function buildDataset() {
     lastCommit: c[c.length - 1].sha,
     commits: c,
     isDemo: true,
-  };
+  });
 }
 
 export const bundledDemo = buildDataset();
