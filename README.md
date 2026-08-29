@@ -1,6 +1,10 @@
 # Repo Visualizer
 
-> A cinematic timeline of your codebase. Watch a repository grow from its first commit to its latest state: every feature blooming into existence, every import knitting the architecture together, every commit a pulse of light rippling through the system.
+> A cinematic timeline of your codebase. Watch a repository grow from its first commit to its latest state.
+
+Repo Visualizer reads and visualizes a git repository's full history, extracts the import graph between files at every commit, and renders the evolving structure as an animated force-directed network. 
+Each top-level directory is a feature cluster, each file is a node sized by code churn, each import is an edge.
+A commit advances the timeline and triggers a ripple from every touched file.
 
 ## Support this Project if you like it
 
@@ -14,13 +18,9 @@
 
 [![Netlify Status](https://api.netlify.com/api/v1/badges/ed135e10-b4bd-4683-ae2a-8d3e46ff95ac/deploy-status)](https://app.netlify.com/projects/repovisualizer/deploys)
 
-![Repo Visualizer](repo-visualizer.gif)
+<img width="720" height="406" alt="Repo_Visualizer_compressed" src="https://github.com/user-attachments/assets/e22f44f9-b3ab-4cce-83ff-b7fdf7b24c10" />
 
-Repo Visualizer reads a git repository's full history, extracts the import graph between files at every commit, and renders the evolving structure as an animated force-directed network. Each top-level directory is a feature
-cluster; each file is a node sized by code churn; each import is an edge.
-A commit advances the timeline and triggers a ripple from every touched file.
-
-**Features**
+## Features
 
 - **Growth over time** - nodes appear and disappear as you move through history; the timeline scrubs quickly with a virtualized scrubber
 - **Final state** - jump to the end of history in one action (toolbar button or `End` key); large repos show a progress bar while the graph catches up
@@ -35,9 +35,11 @@ A commit advances the timeline and triggers a ripple from every touched file.
 
 ![Repo Visualizer - Themes](repo_visualizer_themes.svg "Repo Visualizer Themes")
 
----
+
 
 ## Quick start
+
+Fork or download this repo locally, then:
 
 ```bash
 npm install
@@ -48,7 +50,7 @@ That's it. The app boots with a built-in **demo dataset** (a synthetic SaaS code
 
 Visit <http://localhost:5173> and press **play**.
 
----
+
 
 ## Visualize your own repo
 
@@ -58,10 +60,10 @@ To replace the demo dataset with a real one, point the analyzer at any local git
 npm run analyze -- /path/to/your/repo
 ```
 
-This walks the entire commit history, parses imports for every changed file in every commit, and writes the result to `public/data/history.json`. The web app picks it up automatically - refresh the browser and you'll see
+This walks the entire commit history, parses imports for every changed file in every commit, and writes the result to `public/data/history.json`. The web app picks it up automatically, refresh the browser and you'll see
 your repo's full history.
 
-For very large repos, limit to recent commits:
+For very large repos, you can limit to recent commits:
 
 ```bash
 npm run analyze -- /path/to/your/repo --max=300
@@ -129,9 +131,8 @@ So if you keep a `repovisualizer.config.json` in this project's root it will be 
 npm run analyze -- /path/to/your/repo --config=/path/to/repovisualizer.config.json
 ```
 
----
 
-## Keyboard shortcuts
+### Keyboard shortcuts
 
 | Key | Action |
 | --- | --- |
@@ -146,9 +147,8 @@ npm run analyze -- /path/to/your/repo --config=/path/to/repovisualizer.config.js
 
 **Canvas (desktop):** scroll to zoom, drag to pan. **Touch (mobile/tablet):** pinch to zoom, one finger to drag the graph, tap a node to inspect it. Use **Auto fit** (on by default) to keep the growing graph in view while playing.
 
----
 
-## Export to video
+### Export to video or GIF
 
 Click **Export** in the header (top-right). Choose format, frame rate, and resolution. The app restarts the timeline and records the active canvas directly via `MediaRecorder` (for WebM) or `gif.js` (for animated GIF).
 Exports burn in the **repository name** (top), **commit date** (top-right), and **primary author** (bottom) on the recording only, not during normal playback.
@@ -161,7 +161,6 @@ ffmpeg -i repo-visualizer-timeline.webm -c:v libx264 -crf 18 output.mp4
 
 **Animated GIF** export loads gif.js from CDN on demand and supports up to 600 frames. Best for short, shareable clips at 720p.
 
----
 
 ## How it works
 
@@ -175,9 +174,8 @@ ffmpeg -i repo-visualizer-timeline.webm -c:v libx264 -crf 18 output.mp4
 
 5. **`src/engine/recorder.js`** records the active canvas to WebM via `canvas.captureStream()` + `MediaRecorder`, or to GIF via gif.js.
 
----
 
-## Project structure
+### Project structure
 
 ```
 repo-visualizer/
@@ -214,7 +212,6 @@ repo-visualizer/
 └── package.json
 ```
 
----
 
 ## Need a custom web / mobile / cloud / AI app developed?
 
