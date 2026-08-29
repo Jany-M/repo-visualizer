@@ -33,8 +33,7 @@ A commit advances the timeline and triggers a ripple from every touched file.
 - **Timeline player**, or you can scrub through history, adjust playback speed, and **export the whole animation as a WebM video** or **GIF** for sharing.
 - **Four visual themes included**, all switchable live.
 
-![Repo Visualizer - Themes](repo_visualizer_themes.svg "Repo Visualizer Themes")
-
+<img width="1000" height="1000" alt="themes" src="https://github.com/user-attachments/assets/34495cc6-b63e-45b5-b5c1-0ba652a46c14" />
 
 
 ## Quick start
