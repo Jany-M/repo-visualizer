@@ -3,7 +3,7 @@ import ExportPanel from './ExportPanel.jsx';
 import MobileChrome from './MobileChrome.jsx';
 
 const GITHUB_URL = 'https://github.com/Jany-M/repo-visualizer';
-const AUTHOR_URL = 'https://www.shambix.com/';
+const AUTHOR_URL = 'https://www.shambix.com/?utm_source=repo-visualizer&utm_medium=app';
 
 function GitHubIcon() {
   return (
