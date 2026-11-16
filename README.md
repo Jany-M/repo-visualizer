@@ -8,9 +8,7 @@ A commit advances the timeline and triggers a ripple from every touched file.
 
 ## Support this Project if you like it
 
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-shambix-FFDD00?style=flat-square&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/shambix)
-
-[![Sponsor this on GitHub](https://img.shields.io/github/sponsors/Jany-M?label=Sponsor&logo=githubsponsors&logoColor=white&color=EA4AAA)](https://github.com/sponsors/Jany-M)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-shambix-FFDD00?style=flat-square&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/shambix) or [![Sponsor this on GitHub](https://img.shields.io/github/sponsors/Jany-M?label=Sponsor&logo=githubsponsors&logoColor=white&color=EA4AAA)](https://github.com/sponsors/Jany-M)
 
 ## Check out the Live Demo
 
@@ -211,7 +209,10 @@ repo-visualizer/
 └── package.json
 ```
 
+## Author
+
+Jany Martelli
 
 ## Need a custom web / mobile / cloud / AI app developed?
 
-[Get in touch!](https://www.shambix.com/?utm_source=repo-visualizer&utm_medium=referral&utm_campaign=projects&utm_content=github-readme) or email [info@shambix.com](mailto:info@shambix.com) .
+See tech firm [Shambix](https://www.shambix.com/?utm_source=repo-visualizer&utm_medium=referral&utm_campaign=projects&utm_content=github-readme) services or email [info@shambix.com](mailto:info@shambix.com) .
